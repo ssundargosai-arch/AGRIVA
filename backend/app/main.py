@@ -12,6 +12,7 @@ from app.api.auth import router as auth_router
 from app.api.farmer import router as farmer_router
 from app.api.ai_crop import router as crop_ai_router
 from app.api.store import router as store_router
+from app.api.routes.analytics import router as analytics_router
 from app.api.price_prediction import (
     router as price_prediction_router,
 )
@@ -49,7 +50,8 @@ app.include_router(orders_router)
 app.include_router(payments_router)
 app.include_router(transport_router)
 app.include_router(weather.router)
-app.include_router(agriva_ai.router)    
+app.include_router(agriva_ai.router)
+app.include_router(analytics_router)
 
 
 @app.get("/")

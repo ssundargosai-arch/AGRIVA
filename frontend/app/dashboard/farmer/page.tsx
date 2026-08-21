@@ -638,7 +638,23 @@ export default function FarmerDashboard() {
                 )
               }
             />
+            <NavItem
+              label="Insights"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer/analytics"
+                )
+              }
+           />
 
+           <NavItem
+              label="Analytics"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer/analytics"
+                )
+              }
+            />
             <NavItem
               label="Notifications"
               onClick={() =>
@@ -654,6 +670,8 @@ export default function FarmerDashboard() {
                 router.push(
                   "/dashboard/farmer"
                 )
+
+              
               }
             />
           </nav>
@@ -1202,6 +1220,33 @@ export default function FarmerDashboard() {
                 </div>
               )}
             </section>
+
+            <section
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer/analytics"
+                )
+              }
+              className="cursor-pointer rounded-2xl border bg-white p-6 shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+            >
+              <p className="text-sm text-slate-500">
+                AGRIVA Insights
+              </p>
+
+              <h3 className="mt-2 text-xl font-bold">
+                Analytics Dashboard
+              </h3>
+
+              <p className="mt-3 text-sm text-slate-600">
+                Revenue, expenses, profit, ROI,
+                crop performance and buyer analytics.
+              </p>
+
+              <p className="mt-5 text-sm font-semibold text-emerald-700">
+                Open Analytics →
+              </p>
+            </section> 
+
           </main>
 
           {/* =================================================
