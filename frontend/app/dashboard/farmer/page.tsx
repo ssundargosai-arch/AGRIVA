@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import AgrivaAI from "@/app/components/AgrivaAI";
 
 import {
   ResponsiveContainer,
@@ -12,7 +14,6 @@ import {
   YAxis,
   Tooltip,
 } from "recharts";
-
 
 // =========================================================
 // TYPES
@@ -101,7 +102,6 @@ type DashboardResponse = {
   data: DashboardData;
 };
 
-
 // =========================================================
 // API
 // =========================================================
@@ -110,12 +110,13 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://127.0.0.1:8000";
 
-
 // =========================================================
 // FARMER DASHBOARD
 // =========================================================
 
 export default function FarmerDashboard() {
+  const router = useRouter();
+
   const [dashboard, setDashboard] =
     useState<DashboardData | null>(null);
 
@@ -137,7 +138,6 @@ export default function FarmerDashboard() {
   const [updatingOrderId, setUpdatingOrderId] =
     useState<string | null>(null);
 
-
   // =======================================================
   // LOAD DASHBOARD
   // =======================================================
@@ -148,51 +148,37 @@ export default function FarmerDashboard() {
       setError("");
 
       const token =
-        localStorage.getItem(
-          "access_token"
-        );
+        localStorage.getItem("access_token");
 
       if (!token) {
-        throw new Error(
-          "Authentication token not found. Please login again."
-        );
+        router.replace("/login");
+        return;
       }
 
       const response = await fetch(
         `${API_URL}/api/farmer/dashboard`,
         {
           method: "GET",
-
           headers: {
-            Authorization:
-              `Bearer ${token}`,
-
-            "Content-Type":
-              "application/json",
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
-
           cache: "no-store",
         }
       );
 
       if (!response.ok) {
         if (response.status === 401) {
-          localStorage.removeItem(
-            "access_token"
-          );
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
 
-          localStorage.removeItem(
-            "refresh_token"
-          );
-
-          throw new Error(
-            "Your session has expired. Please login again."
-          );
+          router.replace("/login");
+          return;
         }
 
         if (response.status === 403) {
           throw new Error(
-            "You do not have permission to access the farmer dashboard."
+            "Farmer access required."
           );
         }
 
@@ -204,10 +190,7 @@ export default function FarmerDashboard() {
       const result: DashboardResponse =
         await response.json();
 
-      if (
-        !result.success ||
-        !result.data
-      ) {
+      if (!result.success || !result.data) {
         throw new Error(
           "Invalid dashboard response."
         );
@@ -225,7 +208,6 @@ export default function FarmerDashboard() {
     }
   }
 
-
   // =======================================================
   // LOAD INCOMING ORDERS
   // =======================================================
@@ -236,15 +218,12 @@ export default function FarmerDashboard() {
       setOrdersError("");
 
       const token =
-        localStorage.getItem(
-          "access_token"
-        );
+        localStorage.getItem("access_token");
 
       if (!token) {
         setOrdersError(
           "Authentication token not found."
         );
-
         return;
       }
 
@@ -252,12 +231,9 @@ export default function FarmerDashboard() {
         `${API_URL}/api/orders/farmer/incoming`,
         {
           method: "GET",
-
           headers: {
-            Authorization:
-              `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
-
           cache: "no-store",
         }
       );
@@ -275,9 +251,7 @@ export default function FarmerDashboard() {
       }
 
       setIncomingOrders(
-        Array.isArray(result)
-          ? result
-          : []
+        Array.isArray(result) ? result : []
       );
     } catch (err) {
       setOrdersError(
@@ -290,7 +264,6 @@ export default function FarmerDashboard() {
     }
   }
 
-
   // =======================================================
   // UPDATE ORDER STATUS
   // =======================================================
@@ -300,36 +273,24 @@ export default function FarmerDashboard() {
     newStatus: OrderStatus
   ) {
     const token =
-      localStorage.getItem(
-        "access_token"
-      );
+      localStorage.getItem("access_token");
 
     if (!token) {
-      alert(
-        "Please login again."
-      );
-
+      router.replace("/login");
       return;
     }
 
-    setUpdatingOrderId(
-      orderId
-    );
+    setUpdatingOrderId(orderId);
 
     try {
       const response = await fetch(
         `${API_URL}/api/orders/${orderId}/status`,
         {
           method: "PATCH",
-
           headers: {
-            Authorization:
-              `Bearer ${token}`,
-
-            "Content-Type":
-              "application/json",
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
-
           body: JSON.stringify({
             status: newStatus,
           }),
@@ -348,21 +309,17 @@ export default function FarmerDashboard() {
         );
       }
 
-      setIncomingOrders(
-        (currentOrders) =>
-          currentOrders.map(
-            (order) =>
-              order.id === orderId
-                ? {
-                    ...order,
-                    status:
-                      result.status,
-                  }
-                : order
-          )
+      setIncomingOrders((current) =>
+        current.map((order) =>
+          order.id === orderId
+            ? {
+                ...order,
+                status: result.status,
+              }
+            : order
+        )
       );
 
-      // Refresh main dashboard stats too.
       await loadDashboard();
     } catch (err) {
       alert(
@@ -371,12 +328,9 @@ export default function FarmerDashboard() {
           : "Unable to update order."
       );
     } finally {
-      setUpdatingOrderId(
-        null
-      );
+      setUpdatingOrderId(null);
     }
   }
-
 
   // =======================================================
   // INITIAL LOAD
@@ -385,19 +339,38 @@ export default function FarmerDashboard() {
   useEffect(() => {
     void loadDashboard();
     void loadIncomingOrders();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // =======================================================
+  // HELPERS
+  // =======================================================
+
+  function scrollTo(id: string) {
+    document
+      .getElementById(id)
+      ?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+  }
+
+  function openAgrivaAI() {
+    document
+      .getElementById(
+        "agriva-ai-launcher"
+      )
+      ?.click();
+  }
 
   // =======================================================
   // LOADING
   // =======================================================
 
   if (loading) {
-    return (
-      <DashboardSkeleton />
-    );
+    return <DashboardSkeleton />;
   }
-
 
   // =======================================================
   // ERROR
@@ -406,11 +379,8 @@ export default function FarmerDashboard() {
   if (error) {
     return (
       <main className="min-h-screen bg-slate-50 p-6">
-
         <div className="mx-auto max-w-7xl">
-
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-
             <h2 className="text-lg font-semibold text-red-700">
               Unable to load dashboard
             </h2>
@@ -420,8 +390,8 @@ export default function FarmerDashboard() {
             </p>
 
             <div className="mt-4 flex flex-wrap gap-3">
-
               <button
+                type="button"
                 onClick={() =>
                   window.location.reload()
                 }
@@ -431,6 +401,7 @@ export default function FarmerDashboard() {
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   localStorage.removeItem(
                     "access_token"
@@ -440,24 +411,18 @@ export default function FarmerDashboard() {
                     "refresh_token"
                   );
 
-                  window.location.href =
-                    "/login";
+                  router.replace("/login");
                 }}
                 className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
               >
                 Login Again
               </button>
-
             </div>
-
           </div>
-
         </div>
-
       </main>
     );
   }
-
 
   // =======================================================
   // NO DATA
@@ -466,11 +431,8 @@ export default function FarmerDashboard() {
   if (!dashboard) {
     return (
       <main className="min-h-screen bg-slate-50 p-6">
-
         <div className="mx-auto max-w-7xl">
-
           <div className="rounded-2xl border bg-white p-8 text-center">
-
             <h2 className="text-xl font-semibold">
               No dashboard data
             </h2>
@@ -478,18 +440,14 @@ export default function FarmerDashboard() {
             <p className="mt-2 text-slate-500">
               Dashboard information is currently unavailable.
             </p>
-
           </div>
-
         </div>
-
       </main>
     );
   }
 
-
   // =======================================================
-  // DASHBOARD DATA
+  // DATA
   // =======================================================
 
   const {
@@ -501,33 +459,24 @@ export default function FarmerDashboard() {
     alerts,
   } = dashboard;
 
-
   const chartData = [
     {
       month: "Farms",
-      value:
-        stats.total_farms,
+      value: stats.total_farms,
     },
-
     {
       month: "Crops",
-      value:
-        stats.total_crops,
+      value: stats.total_crops,
     },
-
     {
       month: "Listings",
-      value:
-        stats.active_listings,
+      value: stats.active_listings,
     },
-
     {
       month: "Orders",
-      value:
-        stats.pending_orders,
+      value: stats.pending_orders,
     },
   ];
-
 
   // =======================================================
   // UI
@@ -535,17 +484,14 @@ export default function FarmerDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-
       <div className="flex min-h-screen">
 
         {/* =================================================
             DESKTOP SIDEBAR
         ================================================= */}
 
-        <aside className="hidden w-64 border-r bg-white lg:block">
-
+        <aside className="hidden w-64 shrink-0 border-r bg-white lg:block">
           <div className="border-b p-6">
-
             <h1 className="text-2xl font-bold text-green-700">
               AGRIVA
             </h1>
@@ -553,72 +499,174 @@ export default function FarmerDashboard() {
             <p className="text-xs text-slate-500">
               Farmer Dashboard
             </p>
-
           </div>
 
-
           <nav className="p-4">
-
             <NavItem
               label="Dashboard"
               active
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer"
+                )
+              }
             />
 
-            <NavItem label="My Farm" />
+            <NavItem
+              label="My Farm"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer"
+                )
+              }
+            />
 
-            <NavItem label="AGRIVA Soil" />
+            <NavItem
+              label="AGRIVA Soil"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer"
+                )
+              }
+            />
 
-            <NavItem label="AGRIVA CropSense" />
+            <NavItem
+              label="AGRIVA CropSense"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer/quality"
+                )
+              }
+            />
 
-            <NavItem label="AGRIVA AI" />
+            <NavItem
+              label="AGRIVA AI"
+              onClick={openAgrivaAI}
+            />
 
-            <NavItem label="AGRIVA Store" />
+            <NavItem
+              label="AGRIVA Store"
+              onClick={() =>
+                router.push("/store")
+              }
+            />
 
-            <NavItem label="AGRIVA Market" />
+            <NavItem
+              label="AGRIVA Market"
+              onClick={() =>
+                router.push("/marketplace")
+              }
+            />
 
-            <NavItem label="Crop Doctor" />
+            <NavItem
+              label="Crop Doctor"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer/crop-doctor"
+                )
+              }
+            />
 
             <div className="my-4 border-t" />
 
-            <NavItem label="Quality" />
+            <NavItem
+              label="Quality"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer/quality"
+                )
+              }
+            />
 
-            <NavItem label="Price Prediction" />
+            <NavItem
+              label="Price Prediction"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer/price"
+                )
+              }
+            />
 
-            <NavItem label="Buyers" />
+            <NavItem
+              label="Buyers"
+              onClick={() =>
+                router.push("/marketplace")
+              }
+            />
 
-            <NavItem label="Orders" />
+            <NavItem
+              label="Orders"
+              onClick={() =>
+                scrollTo(
+                  "incoming-orders"
+                )
+              }
+            />
 
-            <NavItem label="Transport" />
+            <NavItem
+              label="Transport"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer/transport"
+                )
+              }
+            />
 
-            <NavItem label="Payments" />
+            <NavItem
+              label="Payments"
+              onClick={() =>
+                scrollTo(
+                  "incoming-orders"
+                )
+              }
+            />
 
-            <NavItem label="Weather" />
+            <NavItem
+              label="Weather"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer/weather"
+                )
+              }
+            />
 
-            <NavItem label="Insights" />
+            <NavItem
+              label="Insights"
+              onClick={() =>
+                scrollTo(
+                  "farm-performance"
+                )
+              }
+            />
 
-            <NavItem label="Notifications" />
+            <NavItem
+              label="Notifications"
+              onClick={() =>
+                scrollTo(
+                  "notifications"
+                )
+              }
+            />
 
-            <NavItem label="Settings" />
-
+            <NavItem
+              label="Settings"
+              onClick={() =>
+                router.push(
+                  "/dashboard/farmer"
+                )
+              }
+            />
           </nav>
-
         </aside>
-
 
         {/* =================================================
             MAIN AREA
         ================================================= */}
 
         <div className="min-w-0 flex-1">
-
-          {/* TOP NAVIGATION */}
-
           <header className="border-b bg-white">
-
             <div className="flex items-center justify-between px-4 py-4 sm:px-6">
-
               <div>
-
                 <h2 className="text-xl font-bold">
                   Welcome, {farmer.name}
                 </h2>
@@ -626,27 +674,21 @@ export default function FarmerDashboard() {
                 <p className="text-sm text-slate-500">
                   Manage your farm with AGRIVA
                 </p>
-
               </div>
-
 
               <div className="hidden rounded-full bg-green-50 px-4 py-2 text-sm font-medium text-green-700 sm:block">
                 {farmer.role}
               </div>
-
             </div>
-
           </header>
-
 
           <main className="mx-auto max-w-7xl space-y-6 p-4 pb-24 sm:p-6 lg:p-8 lg:pb-8">
 
-            {/* =============================================
-                STATISTICS
-            ============================================= */}
+            {/* =================================================
+                STATS
+            ================================================= */}
 
             <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
               <StatCard
                 title="Farm Health"
                 value={`${stats.total_farms}`}
@@ -676,46 +718,45 @@ export default function FarmerDashboard() {
                 subtitle="Orders awaiting action"
                 icon="📦"
               />
-
             </section>
 
-
-            {/* =============================================
+            {/* =================================================
                 WEATHER + AI
-            ============================================= */}
+            ================================================= */}
 
             <section className="grid gap-6 lg:grid-cols-2">
 
-              <section className="rounded-2xl border bg-white p-6 shadow-sm">
+              {/* WEATHER */}
 
+              <section
+                onClick={() =>
+                  router.push(
+                    "/dashboard/farmer/weather"
+                  )
+                }
+                className="cursor-pointer rounded-2xl border bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-green-300 hover:shadow-md"
+              >
                 <div className="flex items-center justify-between">
-
                   <div>
-
                     <p className="text-sm text-slate-500">
-                      Weather
+                      Weather Intelligence
                     </p>
 
                     <h3 className="mt-1 text-2xl font-bold">
                       {weather.temperature}°C
                     </h3>
-
                   </div>
 
                   <div className="text-4xl">
                     ☀️
                   </div>
-
                 </div>
-
 
                 <p className="mt-4 font-medium">
                   {weather.condition}
                 </p>
 
-
                 <div className="mt-4 grid grid-cols-2 gap-3">
-
                   <WeatherItem
                     label="Humidity"
                     value={`${weather.humidity}%`}
@@ -725,14 +766,16 @@ export default function FarmerDashboard() {
                     label="Rain Probability"
                     value={`${weather.rain_probability}%`}
                   />
-
                 </div>
 
+                <p className="mt-5 text-sm font-semibold text-green-700">
+                  Open Weather Dashboard →
+                </p>
               </section>
 
+              {/* AGRIVA AI */}
 
               <section className="rounded-2xl border bg-white p-6 shadow-sm">
-
                 <p className="text-sm text-slate-500">
                   AGRIVA AI Recommendation
                 </p>
@@ -742,57 +785,49 @@ export default function FarmerDashboard() {
                 </h3>
 
                 <p className="mt-3 text-sm leading-6 text-slate-600">
-                  AGRIVA will provide crop,
-                  soil and farm recommendations
-                  based on your available farm
-                  data.
+                  Ask AGRIVA AI about crops,
+                  soil, irrigation, weather,
+                  market decisions and farming
+                  recommendations.
                 </p>
 
                 <button
-                  onClick={() => {
-                    window.location.href =
-                      "/dashboard/farmer/crop-doctor";
-                  }}
+                  type="button"
+                  onClick={openAgrivaAI}
                   className="mt-5 rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white hover:bg-green-700"
                 >
                   Open AGRIVA AI
                 </button>
-
               </section>
-
             </section>
 
+            {/* =================================================
+                PERFORMANCE
+            ================================================= */}
 
-            {/* =============================================
-                FARM PERFORMANCE
-            ============================================= */}
-
-            <section className="rounded-2xl border bg-white p-6 shadow-sm">
-
+            <section
+              id="farm-performance"
+              className="rounded-2xl border bg-white p-6 shadow-sm"
+            >
               <div className="mb-6">
-
                 <h3 className="text-lg font-bold">
                   Farm Performance
                 </h3>
 
                 <p className="text-sm text-slate-500">
-                  Current dashboard metrics from AGRIVA
+                  Current dashboard metrics
+                  from AGRIVA
                 </p>
-
               </div>
 
-
               <div className="h-72 w-full">
-
                 <ResponsiveContainer
                   width="100%"
                   height="100%"
                 >
-
                   <LineChart
                     data={chartData}
                   >
-
                     <CartesianGrid
                       strokeDasharray="3 3"
                     />
@@ -812,22 +847,16 @@ export default function FarmerDashboard() {
                       dataKey="value"
                       strokeWidth={3}
                     />
-
                   </LineChart>
-
                 </ResponsiveContainer>
-
               </div>
-
             </section>
 
-
-            {/* =============================================
-                RECENT CROPS + ORDERS
-            ============================================= */}
+            {/* =================================================
+                RECENT DATA
+            ================================================= */}
 
             <section className="grid gap-6 lg:grid-cols-2">
-
               <DataSection
                 title="Recent Crops"
                 emptyMessage="No crops have been added yet."
@@ -836,10 +865,8 @@ export default function FarmerDashboard() {
                   0
                 }
               >
-
                 {recent_crops.map(
                   (crop, index) => (
-
                     <div
                       key={
                         crop.id ??
@@ -847,45 +874,31 @@ export default function FarmerDashboard() {
                       }
                       className="flex items-center justify-between rounded-xl bg-slate-50 p-4"
                     >
-
                       <div>
-
                         <p className="font-semibold">
-
                           {crop.crop_name ??
                             crop.name ??
                             "Crop"}
-
                         </p>
 
                         <p className="text-sm text-slate-500">
-
                           {crop.status ??
                             "No status"}
-
                         </p>
-
                       </div>
-
 
                       {crop.quantity !==
                         undefined && (
-
                         <span className="text-sm text-slate-600">
-
-                          {crop.quantity}
-
+                          {
+                            crop.quantity
+                          }
                         </span>
-
                       )}
-
                     </div>
-
                   )
                 )}
-
               </DataSection>
-
 
               <DataSection
                 title="Recent Orders"
@@ -895,10 +908,8 @@ export default function FarmerDashboard() {
                   0
                 }
               >
-
                 {recent_orders.map(
                   (order, index) => (
-
                     <div
                       key={
                         order.id ??
@@ -906,38 +917,27 @@ export default function FarmerDashboard() {
                       }
                       className="flex items-center justify-between rounded-xl bg-slate-50 p-4"
                     >
-
                       <div>
-
                         <p className="font-semibold">
-
                           Order #
-
                           {order.id?.slice(
                             0,
                             8
                           ) ??
                             index + 1}
-
                         </p>
 
                         <p className="text-sm capitalize text-slate-500">
-
                           {order.status ??
                             "Unknown status"}
-
                         </p>
-
                       </div>
-
 
                       {(order.total_amount !==
                         undefined ||
                         order.amount !==
                           undefined) && (
-
                         <span className="font-semibold">
-
                           ₹
                           {(
                             order.total_amount ??
@@ -946,47 +946,37 @@ export default function FarmerDashboard() {
                           ).toLocaleString(
                             "en-IN"
                           )}
-
                         </span>
-
                       )}
-
                     </div>
-
                   )
                 )}
-
               </DataSection>
-
             </section>
 
-
-            {/* =============================================
-                INCOMING MARKETPLACE ORDERS
-            ============================================= */}
+            {/* =================================================
+                INCOMING ORDERS
+            ================================================= */}
 
             <section
               id="incoming-orders"
               className="rounded-2xl border bg-white p-6 shadow-sm"
             >
-
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-
                 <div>
-
                   <h3 className="text-xl font-bold">
                     Incoming Orders
                   </h3>
 
                   <p className="mt-1 text-sm text-slate-500">
-                    Accept, reject or complete
-                    marketplace orders from buyers.
+                    Accept, reject or
+                    complete marketplace
+                    orders from buyers.
                   </p>
-
                 </div>
 
-
                 <button
+                  type="button"
                   onClick={() =>
                     void loadIncomingOrders()
                   }
@@ -999,51 +989,32 @@ export default function FarmerDashboard() {
                     ? "Refreshing..."
                     : "Refresh Orders"}
                 </button>
-
               </div>
 
-
-              {/* ORDERS ERROR */}
-
               {ordersError && (
-
                 <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-
                   {ordersError}
-
                 </div>
-
               )}
 
-
-              {/* ORDERS LOADING */}
-
               {ordersLoading ? (
-
                 <div className="mt-6 rounded-xl bg-slate-50 p-8 text-center">
-
                   <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-green-600" />
 
                   <p className="mt-4 text-sm text-slate-500">
-                    Loading incoming orders...
+                    Loading incoming
+                    orders...
                   </p>
-
                 </div>
-
               ) : incomingOrders.length ===
                 0 ? (
-
                 <EmptyState
                   message="No incoming marketplace orders."
                 />
-
               ) : (
-
                 <div className="mt-6 space-y-4">
-
                   {incomingOrders.map(
                     (order) => {
-
                       const item =
                         order.items?.[0];
 
@@ -1052,55 +1023,37 @@ export default function FarmerDashboard() {
                         order.id;
 
                       return (
-
                         <article
                           key={order.id}
                           className="rounded-2xl border border-slate-200 bg-white p-5"
                         >
-
                           <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
-
-                            {/* ORDER DETAILS */}
-
                             <div className="min-w-0">
-
                               <div className="flex flex-wrap items-center gap-3">
-
                                 <h4 className="font-bold">
-
                                   Order #
-
                                   {order.id.slice(
                                     0,
                                     8
                                   )}
-
                                 </h4>
-
 
                                 <OrderStatusBadge
                                   status={
                                     order.status
                                   }
                                 />
-
                               </div>
 
-
                               <p className="mt-2 text-xs text-slate-500">
-
                                 Buyer ID:{" "}
-
                                 {order.buyer_id.slice(
                                   0,
                                   8
                                 )}
-
                               </p>
 
-
                               <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
                                 <OrderMetric
                                   label="Quantity"
                                   value={
@@ -1134,22 +1087,15 @@ export default function FarmerDashboard() {
                                     "en-IN"
                                   )}
                                 />
-
                               </div>
-
                             </div>
 
-
-                            {/* ACTIONS */}
-
                             <div className="flex shrink-0 flex-wrap gap-2">
-
                               {order.status ===
                                 "pending" && (
-
                                 <>
-
                                   <button
+                                    type="button"
                                     onClick={() =>
                                       void updateOrderStatus(
                                         order.id,
@@ -1159,17 +1105,15 @@ export default function FarmerDashboard() {
                                     disabled={
                                       isUpdating
                                     }
-                                    className="rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                                   >
-
                                     {isUpdating
                                       ? "Updating..."
                                       : "Accept"}
-
                                   </button>
 
-
                                   <button
+                                    type="button"
                                     onClick={() =>
                                       void updateOrderStatus(
                                         order.id,
@@ -1179,22 +1123,17 @@ export default function FarmerDashboard() {
                                     disabled={
                                       isUpdating
                                     }
-                                    className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
                                   >
-
                                     Reject
-
                                   </button>
-
                                 </>
-
                               )}
-
 
                               {order.status ===
                                 "accepted" && (
-
                                 <button
+                                  type="button"
                                   onClick={() =>
                                     void updateOrderStatus(
                                       order.id,
@@ -1204,74 +1143,43 @@ export default function FarmerDashboard() {
                                   disabled={
                                     isUpdating
                                   }
-                                  className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                                 >
-
                                   {isUpdating
                                     ? "Updating..."
                                     : "Complete"}
-
                                 </button>
-
                               )}
-
-
-                              {(order.status ===
-                                "rejected" ||
-                                order.status ===
-                                  "completed" ||
-                                order.status ===
-                                  "cancelled") && (
-
-                                <span className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-medium capitalize text-slate-600">
-
-                                  {order.status}
-
-                                </span>
-
-                              )}
-
                             </div>
-
                           </div>
-
                         </article>
-
                       );
                     }
                   )}
-
                 </div>
-
               )}
-
             </section>
 
-
-            {/* =============================================
+            {/* =================================================
                 NOTIFICATIONS
-            ============================================= */}
+            ================================================= */}
 
-            <section className="rounded-2xl border bg-white p-6 shadow-sm">
-
+            <section
+              id="notifications"
+              className="rounded-2xl border bg-white p-6 shadow-sm"
+            >
               <h3 className="text-lg font-bold">
                 Notifications & Alerts
               </h3>
 
-
               {alerts.length === 0 ? (
-
                 <EmptyState
                   message="No new notifications or alerts."
                 />
-
               ) : (
-
                 <div className="mt-4 space-y-3">
-
                   {alerts.map(
                     (alert, index) => (
-
                       <div
                         key={
                           alert.id ??
@@ -1279,81 +1187,88 @@ export default function FarmerDashboard() {
                         }
                         className="rounded-xl bg-slate-50 p-4"
                       >
-
                         <p className="font-semibold">
-
                           {alert.title ??
                             "AGRIVA Alert"}
-
                         </p>
 
                         <p className="mt-1 text-sm text-slate-600">
-
                           {alert.message ??
                             "No additional information."}
-
                         </p>
-
                       </div>
-
                     )
                   )}
-
                 </div>
-
               )}
-
             </section>
-
           </main>
 
+          {/* =================================================
+              MOBILE NAV
+          ================================================= */}
 
-          {/* ===============================================
-              MOBILE NAVIGATION
-          =============================================== */}
-
-          <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-white lg:hidden">
-
+          <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white lg:hidden">
             <div className="grid grid-cols-5">
-
               <MobileNavItem
                 icon="🏠"
                 label="Home"
                 active
+                onClick={() =>
+                  router.push(
+                    "/dashboard/farmer"
+                  )
+                }
               />
 
               <MobileNavItem
                 icon="🌾"
                 label="Farm"
+                onClick={() =>
+                  router.push(
+                    "/dashboard/farmer"
+                  )
+                }
               />
 
               <MobileNavItem
                 icon="🤖"
                 label="AI"
+                onClick={
+                  openAgrivaAI
+                }
+              />
+
+              <MobileNavItem
+                icon="🌦️"
+                label="Weather"
+                onClick={() =>
+                  router.push(
+                    "/dashboard/farmer/weather"
+                  )
+                }
               />
 
               <MobileNavItem
                 icon="🛒"
                 label="Market"
+                onClick={() =>
+                  router.push(
+                    "/marketplace"
+                  )
+                }
               />
-
-              <MobileNavItem
-                icon="⚙️"
-                label="More"
-              />
-
             </div>
-
           </nav>
-
         </div>
-
       </div>
 
+      {/* FLOATING AGRIVA AI */}
+
+      <AgrivaAI />
     </div>
   );
 }
-
 
 // =========================================================
 // NAV ITEM
@@ -1362,12 +1277,16 @@ export default function FarmerDashboard() {
 function NavItem({
   label,
   active = false,
+  onClick,
 }: {
   label: string;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <button
+      type="button"
+      onClick={onClick}
       className={`mb-1 w-full rounded-xl px-4 py-3 text-left text-sm font-medium transition ${
         active
           ? "bg-green-50 text-green-700"
@@ -1379,7 +1298,6 @@ function NavItem({
   );
 }
 
-
 // =========================================================
 // MOBILE NAV ITEM
 // =========================================================
@@ -1388,30 +1306,31 @@ function MobileNavItem({
   icon,
   label,
   active = false,
+  onClick,
 }: {
   icon: string;
   label: string;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <button
+      type="button"
+      onClick={onClick}
       className={`flex flex-col items-center gap-1 px-2 py-3 text-xs ${
         active
           ? "font-semibold text-green-700"
           : "text-slate-500"
       }`}
     >
-
       <span className="text-lg">
         {icon}
       </span>
 
       {label}
-
     </button>
   );
 }
-
 
 // =========================================================
 // STAT CARD
@@ -1430,11 +1349,8 @@ function StatCard({
 }) {
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
-
       <div className="flex items-start justify-between">
-
         <div>
-
           <p className="text-sm text-slate-500">
             {title}
           </p>
@@ -1446,20 +1362,15 @@ function StatCard({
           <p className="mt-1 text-xs text-slate-400">
             {subtitle}
           </p>
-
         </div>
-
 
         <span className="text-2xl">
           {icon}
         </span>
-
       </div>
-
     </div>
   );
 }
-
 
 // =========================================================
 // WEATHER ITEM
@@ -1474,7 +1385,6 @@ function WeatherItem({
 }) {
   return (
     <div className="rounded-xl bg-slate-50 p-4">
-
       <p className="text-xs text-slate-500">
         {label}
       </p>
@@ -1482,11 +1392,9 @@ function WeatherItem({
       <p className="mt-1 font-semibold">
         {value}
       </p>
-
     </div>
   );
 }
-
 
 // =========================================================
 // ORDER METRIC
@@ -1501,7 +1409,6 @@ function OrderMetric({
 }) {
   return (
     <div className="rounded-xl bg-slate-50 p-3">
-
       <p className="text-xs text-slate-500">
         {label}
       </p>
@@ -1509,11 +1416,9 @@ function OrderMetric({
       <p className="mt-1 text-sm font-semibold">
         {value}
       </p>
-
     </div>
   );
 }
-
 
 // =========================================================
 // ORDER STATUS BADGE
@@ -1544,7 +1449,6 @@ function OrderStatusBadge({
   );
 }
 
-
 // =========================================================
 // DATA SECTION
 // =========================================================
@@ -1562,30 +1466,22 @@ function DataSection({
 }) {
   return (
     <section className="rounded-2xl border bg-white p-6 shadow-sm">
-
       <h3 className="text-lg font-bold">
         {title}
       </h3>
 
-
       {isEmpty ? (
-
         <EmptyState
           message={emptyMessage}
         />
-
       ) : (
-
         <div className="mt-4 space-y-3">
           {children}
         </div>
-
       )}
-
     </section>
   );
 }
-
 
 // =========================================================
 // EMPTY STATE
@@ -1598,7 +1494,6 @@ function EmptyState({
 }) {
   return (
     <div className="mt-4 rounded-xl bg-slate-50 p-8 text-center">
-
       <div className="text-3xl">
         📭
       </div>
@@ -1606,54 +1501,39 @@ function EmptyState({
       <p className="mt-3 text-sm text-slate-500">
         {message}
       </p>
-
     </div>
   );
 }
 
-
 // =========================================================
-// DASHBOARD SKELETON
+// SKELETON
 // =========================================================
 
 function DashboardSkeleton() {
   return (
     <main className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
-
       <div className="mx-auto max-w-7xl animate-pulse space-y-6">
-
         <div className="h-10 w-72 rounded-lg bg-slate-200" />
 
-
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
           {[1, 2, 3, 4].map(
             (item) => (
-
               <div
                 key={item}
                 className="h-32 rounded-2xl bg-slate-200"
               />
-
             )
           )}
-
         </div>
-
 
         <div className="grid gap-6 lg:grid-cols-2">
-
           <div className="h-64 rounded-2xl bg-slate-200" />
 
           <div className="h-64 rounded-2xl bg-slate-200" />
-
         </div>
 
-
         <div className="h-80 rounded-2xl bg-slate-200" />
-
       </div>
-
     </main>
   );
 }

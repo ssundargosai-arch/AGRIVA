@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from app.api.routes import weather
+from app.api.routes import agriva_ai
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.ai_image import router as ai_image_router
 from app.core.config import get_settings
@@ -46,6 +48,8 @@ app.include_router(marketplace_router)
 app.include_router(orders_router)
 app.include_router(payments_router)
 app.include_router(transport_router)
+app.include_router(weather.router)
+app.include_router(agriva_ai.router)    
 
 
 @app.get("/")
