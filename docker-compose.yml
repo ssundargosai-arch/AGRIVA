@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: agriva-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agriva
+      POSTGRES_USER: agriva
+      POSTGRES_PASSWORD: agriva
+    ports:
+      - "5432:5432"
+    volumes:
+      - agriva_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agriva -d agriva"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: agriva-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://agriva:agriva@postgres:5432/agriva
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh}
+      CORS_ORIGINS: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      DEMO_MODE: ${DEMO_MODE:-true}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: agriva-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  agriva_postgres_data:

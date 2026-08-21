@@ -1,0 +1,1 @@
+from app.api.dependencies import require_farmer
