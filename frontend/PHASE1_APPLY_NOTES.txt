@@ -1,0 +1,24 @@
+AGRIVA Farmer-Friendly Frontend — Phase 1 Patch
+
+Target folder:
+D:\AGRIVA\frontend
+
+Before applying:
+1. Back up D:\AGRIVA\frontend.
+2. Extract this ZIP so its app/, components/, i18n/, and locales/ folders merge into D:\AGRIVA\frontend.
+3. Allow replacement of the existing files included in this patch.
+
+After applying, run in PowerShell:
+cd D:\AGRIVA\frontend
+npm run lint
+npm run build
+
+Then start the frontend and manually verify:
+- Marathi is the default language for a fresh user.
+- मराठी / हिंदी / English switching works.
+- Selected language remains after refresh.
+- Login/logout still work.
+- Farmer dashboard still loads.
+- Mobile bottom navigation works at 360–430px.
+- Desktop navigation works at >=1024px.
+- No horizontal overflow is visible.

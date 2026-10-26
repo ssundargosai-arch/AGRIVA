@@ -130,3 +130,13 @@ class SoilAnalysis(Base):
         default=datetime.utcnow,
         nullable=False,
     )
+    
+    field_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "farm_fields.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )

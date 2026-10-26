@@ -91,3 +91,7 @@ def require_farmer(
         )
 
     return current_user
+
+
+require_buyer = require_roles("BUYER")
+require_admin = require_roles("ADMIN")

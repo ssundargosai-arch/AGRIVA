@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 520">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cceeff"/>
+      <stop offset="0.55" stop-color="#fff4c7"/>
+      <stop offset="1" stop-color="#ffd78a"/>
+    </linearGradient>
+
+    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#78bf49"/>
+      <stop offset="0.52" stop-color="#4a9b43"/>
+      <stop offset="1" stop-color="#24643b"/>
+    </linearGradient>
+
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5cc85b"/>
+      <stop offset="1" stop-color="#17683d"/>
+    </linearGradient>
+
+    <radialGradient id="sunGlow">
+      <stop offset="0" stop-color="#fffbd1" stop-opacity="1"/>
+      <stop offset="0.38" stop-color="#ffe46e" stop-opacity=".96"/>
+      <stop offset="0.72" stop-color="#fbbf24" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0f5132" flood-opacity=".18"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="520" fill="url(#sky)"/>
+
+  <!-- Clear sun -->
+  <circle cx="1298" cy="104" r="170" fill="url(#sunGlow)"/>
+  <circle cx="1298" cy="104" r="66" fill="#ffd84d" opacity=".98"/>
+  <g stroke="#fbbf24" stroke-width="8" stroke-linecap="round" opacity=".75">
+    <path d="M1298 9V-24"/>
+    <path d="M1298 232v34"/>
+    <path d="M1178 104h-42"/>
+    <path d="M1420 104h42"/>
+    <path d="M1212 19l-28-28"/>
+    <path d="M1384 189l28 28"/>
+    <path d="M1384 19l28-28"/>
+    <path d="M1212 189l-28 28"/>
+  </g>
+
+  <!-- distant hills -->
+  <path d="M0 244 C190 192 355 210 520 190 C700 168 856 226 1030 197 C1230 165 1405 173 1600 204 L1600 330 L0 330Z"
+        fill="#78987a" opacity=".42"/>
+  <path d="M0 282 C210 236 420 269 620 233 C800 201 1010 277 1205 234 C1390 196 1500 225 1600 244 L1600 360 L0 360Z"
+        fill="#4d7955" opacity=".62"/>
+
+  <!-- green fields -->
+  <path d="M0 306 C220 286 420 301 655 272 C870 245 1052 301 1280 262 C1415 238 1510 251 1600 269 L1600 520 L0 520Z"
+        fill="url(#field)"/>
+
+  <g opacity=".42" stroke="#ddfac4" stroke-width="4">
+    <path d="M125 520 L690 300"/>
+    <path d="M335 520 L765 300"/>
+    <path d="M550 520 L835 300"/>
+    <path d="M780 520 L915 300"/>
+    <path d="M1015 520 L1000 300"/>
+    <path d="M1240 520 L1080 300"/>
+    <path d="M1480 520 L1155 300"/>
+  </g>
+
+  <g opacity=".34" stroke="#153f2b" stroke-width="5">
+    <path d="M0 390 C290 348 510 358 780 329 C1010 307 1245 329 1600 300"/>
+    <path d="M0 440 C320 392 555 406 825 374 C1070 348 1308 372 1600 342"/>
+    <path d="M0 488 C310 441 590 453 875 419 C1135 390 1380 418 1600 390"/>
+  </g>
+
+  <!-- tractor -->
+  <g transform="translate(1260 230)" fill="#225e3c" opacity=".92">
+    <rect x="0" y="18" width="92" height="35" rx="8"/>
+    <rect x="21" y="-8" width="46" height="30" rx="4"/>
+    <rect x="67" y="6" width="35" height="14" rx="3"/>
+    <circle cx="23" cy="61" r="18"/>
+    <circle cx="82" cy="59" r="26"/>
+    <rect x="-28" y="29" width="34" height="6" rx="3"/>
+  </g>
+
+  <!-- CLEAR foreground plant -->
+  <g transform="translate(1438 35)" filter="url(#softShadow)">
+    <path d="M63 10 C52 95 55 180 68 290 C78 365 86 430 92 505"
+          fill="none" stroke="#1e623d" stroke-width="14" stroke-linecap="round"/>
+
+    <g fill="url(#leaf)" stroke="#e5ffd9" stroke-width="2.5">
+      <path d="M57 62 C-5 54 -33 7 -14 -36 C48 -33 79 2 57 62Z"/>
+      <path d="M62 115 C116 101 151 57 140 17 C86 18 57 57 62 115Z"/>
+      <path d="M59 178 C2 170 -27 131 -14 88 C41 89 69 124 59 178Z"/>
+      <path d="M69 235 C124 224 156 185 147 144 C96 143 66 181 69 235Z"/>
+      <path d="M73 302 C21 290 -6 254 5 216 C53 216 80 250 73 302Z"/>
+      <path d="M82 365 C127 353 155 321 150 288 C106 288 79 318 82 365Z"/>
+    </g>
+
+    <g fill="#dfffd6" opacity=".75">
+      <circle cx="50" cy="54" r="5"/>
+      <circle cx="83" cy="108" r="5"/>
+      <circle cx="47" cy="170" r="4"/>
+      <circle cx="91" cy="229" r="4"/>
+    </g>
+  </g>
+
+  <!-- small crop sprouts foreground -->
+  <g fill="#d8f8b4" opacity=".75">
+    <path d="M1040 415 C1022 394 1004 393 992 402 C1004 425 1025 431 1040 415Z"/>
+    <path d="M1040 415 C1055 393 1074 390 1088 400 C1078 424 1055 432 1040 415Z"/>
+    <path d="M1040 415 L1040 470" stroke="#d8f8b4" stroke-width="6"/>
+  </g>
+</svg>

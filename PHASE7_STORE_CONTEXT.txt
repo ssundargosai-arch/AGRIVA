@@ -1,0 +1,2852 @@
+
+=================================================
+FILE: .\backend\app\api\store.py
+=================================================
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import asc, desc, or_
+from sqlalchemy.orm import Session
+
+from app.api.dependencies import require_farmer
+from app.db.session import get_db
+from app.models.store import (
+    Cart,
+    CartItem,
+    Product,
+    ProductCategory,
+    StoreOrder,
+    StoreOrderItem,
+)
+from app.models.user import User
+
+
+router = APIRouter(
+    prefix="/api/store",
+    tags=["AGRIVA Store"],
+)
+
+
+# ---------------------------------------------------------
+# STORE HEALTH
+# ---------------------------------------------------------
+
+@router.get("/health")
+def store_health():
+    return {
+        "success": True,
+        "message": "AGRIVA Store API is running",
+    }
+
+
+# ---------------------------------------------------------
+# CATEGORIES
+# ---------------------------------------------------------
+
+@router.get("/categories")
+def get_categories(
+    db: Session = Depends(get_db),
+):
+    categories = (
+        db.query(ProductCategory)
+        .order_by(ProductCategory.name.asc())
+        .all()
+    )
+
+    return {
+        "success": True,
+        "categories": [
+            {
+                "id": str(category.id),
+                "name": category.name,
+            }
+            for category in categories
+        ],
+    }
+
+
+# ---------------------------------------------------------
+# PRODUCTS
+# ---------------------------------------------------------
+
+@router.get("/products")
+def get_products(
+    search: str | None = None,
+    category_id: UUID | None = None,
+    sort: str = Query(
+        default="name",
+        pattern="^(name|price_low|price_high)$",
+    ),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Product)
+
+    if search:
+        pattern = f"%{search}%"
+
+        query = query.filter(
+            or_(
+                Product.name.ilike(pattern),
+                Product.description.ilike(pattern),
+            )
+        )
+
+    if category_id:
+        query = query.filter(
+            Product.category_id == category_id
+        )
+
+    if sort == "price_low":
+        query = query.order_by(
+            asc(Product.price)
+        )
+
+    elif sort == "price_high":
+        query = query.order_by(
+            desc(Product.price)
+        )
+
+    else:
+        query = query.order_by(
+            asc(Product.name)
+        )
+
+    products = query.all()
+
+    return {
+        "success": True,
+        "count": len(products),
+        "products": [
+            {
+                "id": str(product.id),
+                "category_id": str(product.category_id),
+                "name": product.name,
+                "description": product.description,
+                "price": product.price,
+                "stock_quantity": product.stock_quantity,
+            }
+            for product in products
+        ],
+    }
+
+
+@router.get("/products/{product_id}")
+def get_product(
+    product_id: UUID,
+    db: Session = Depends(get_db),
+):
+    product = (
+        db.query(Product)
+        .filter(Product.id == product_id)
+        .first()
+    )
+
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found",
+        )
+
+    return {
+        "success": True,
+        "product": {
+            "id": str(product.id),
+            "category_id": str(product.category_id),
+            "name": product.name,
+            "description": product.description,
+            "price": product.price,
+            "stock_quantity": product.stock_quantity,
+        },
+    }
+
+
+# ---------------------------------------------------------
+# CART HELPERS
+# ---------------------------------------------------------
+
+def get_or_create_cart(
+    db: Session,
+    current_user: User,
+) -> Cart:
+    cart = (
+        db.query(Cart)
+        .filter(
+            Cart.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if cart:
+        return cart
+
+    cart = Cart(
+        user_id=current_user.id,
+    )
+
+    db.add(cart)
+    db.commit()
+    db.refresh(cart)
+
+    return cart
+
+
+def build_cart_response(
+    db: Session,
+    cart: Cart,
+):
+    items = (
+        db.query(CartItem)
+        .filter(
+            CartItem.cart_id == cart.id
+        )
+        .all()
+    )
+
+    cart_items = []
+    total_items = 0
+    total_amount = 0.0
+
+    for item in items:
+        product = (
+            db.query(Product)
+            .filter(
+                Product.id == item.product_id
+            )
+            .first()
+        )
+
+        if not product:
+            continue
+
+        subtotal = (
+            product.price
+            * item.quantity
+        )
+
+        total_items += item.quantity
+        total_amount += subtotal
+
+        cart_items.append(
+            {
+                "id": str(item.id),
+                "product_id": str(product.id),
+                "product_name": product.name,
+                "quantity": item.quantity,
+                "unit_price": product.price,
+                "subtotal": round(
+                    subtotal,
+                    2,
+                ),
+            }
+        )
+
+    return {
+        "id": str(cart.id),
+        "items": cart_items,
+        "total_items": total_items,
+        "total_amount": round(
+            total_amount,
+            2,
+        ),
+    }
+
+
+# ---------------------------------------------------------
+# GET CART
+# ---------------------------------------------------------
+
+@router.get("/cart")
+def get_cart(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_farmer),
+):
+    cart = get_or_create_cart(
+        db,
+        current_user,
+    )
+
+    return {
+        "success": True,
+        "cart": build_cart_response(
+            db,
+            cart,
+        ),
+    }
+
+
+# ---------------------------------------------------------
+# ADD TO CART
+# ---------------------------------------------------------
+
+@router.post("/cart/items")
+def add_to_cart(
+    product_id: UUID,
+    quantity: int = 1,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_farmer),
+):
+    if quantity < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Quantity must be at least 1",
+        )
+
+    product = (
+        db.query(Product)
+        .filter(
+            Product.id == product_id
+        )
+        .first()
+    )
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found",
+        )
+
+    if product.stock_quantity < quantity:
+        raise HTTPException(
+            status_code=400,
+            detail="Insufficient product stock",
+        )
+
+    cart = get_or_create_cart(
+        db,
+        current_user,
+    )
+
+    existing_item = (
+        db.query(CartItem)
+        .filter(
+            CartItem.cart_id == cart.id,
+            CartItem.product_id == product.id,
+        )
+        .first()
+    )
+
+    if existing_item:
+        new_quantity = (
+            existing_item.quantity
+            + quantity
+        )
+
+        if new_quantity > product.stock_quantity:
+            raise HTTPException(
+                status_code=400,
+                detail="Requested quantity exceeds stock",
+            )
+
+        existing_item.quantity = new_quantity
+
+    else:
+        item = CartItem(
+            cart_id=cart.id,
+            product_id=product.id,
+            quantity=quantity,
+        )
+
+        db.add(item)
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Product added to cart",
+        "cart": build_cart_response(
+            db,
+            cart,
+        ),
+    }
+
+
+# ---------------------------------------------------------
+# UPDATE QUANTITY
+# ---------------------------------------------------------
+
+@router.patch("/cart/items/{item_id}")
+def update_cart_item(
+    item_id: UUID,
+    quantity: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_farmer),
+):
+    if quantity < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Quantity must be at least 1",
+        )
+
+    cart = get_or_create_cart(
+        db,
+        current_user,
+    )
+
+    item = (
+        db.query(CartItem)
+        .filter(
+            CartItem.id == item_id,
+            CartItem.cart_id == cart.id,
+        )
+        .first()
+    )
+
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail="Cart item not found",
+        )
+
+    product = (
+        db.query(Product)
+        .filter(
+            Product.id == item.product_id
+        )
+        .first()
+    )
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found",
+        )
+
+    if quantity > product.stock_quantity:
+        raise HTTPException(
+            status_code=400,
+            detail="Requested quantity exceeds stock",
+        )
+
+    item.quantity = quantity
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Cart quantity updated",
+        "cart": build_cart_response(
+            db,
+            cart,
+        ),
+    }
+
+
+# ---------------------------------------------------------
+# REMOVE CART ITEM
+# ---------------------------------------------------------
+
+@router.delete("/cart/items/{item_id}")
+def remove_cart_item(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_farmer),
+):
+    cart = get_or_create_cart(
+        db,
+        current_user,
+    )
+
+    item = (
+        db.query(CartItem)
+        .filter(
+            CartItem.id == item_id,
+            CartItem.cart_id == cart.id,
+        )
+        .first()
+    )
+
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail="Cart item not found",
+        )
+
+    db.delete(item)
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Product removed from cart",
+        "cart": build_cart_response(
+            db,
+            cart,
+        ),
+    }
+
+
+# ---------------------------------------------------------
+# CHECKOUT
+# ---------------------------------------------------------
+
+@router.post("/checkout")
+def checkout(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_farmer),
+):
+    cart = get_or_create_cart(
+        db,
+        current_user,
+    )
+
+    cart_items = (
+        db.query(CartItem)
+        .filter(
+            CartItem.cart_id == cart.id
+        )
+        .all()
+    )
+
+    if not cart_items:
+        raise HTTPException(
+            status_code=400,
+            detail="Cart is empty",
+        )
+
+    total_amount = 0.0
+    order_products = []
+
+    for item in cart_items:
+        product = (
+            db.query(Product)
+            .filter(
+                Product.id == item.product_id
+            )
+            .first()
+        )
+
+        if not product:
+            raise HTTPException(
+                status_code=404,
+                detail="Product not found",
+            )
+
+        if item.quantity > product.stock_quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Insufficient stock for "
+                    f"{product.name}"
+                ),
+            )
+
+        subtotal = (
+            product.price
+            * item.quantity
+        )
+
+        total_amount += subtotal
+
+        order_products.append(
+            (
+                item,
+                product,
+            )
+        )
+
+    order = StoreOrder(
+        user_id=current_user.id,
+        total_amount=round(
+            total_amount,
+            2,
+        ),
+        status="pending",
+    )
+
+    db.add(order)
+    db.flush()
+
+    for item, product in order_products:
+        order_item = StoreOrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            quantity=item.quantity,
+            unit_price=product.price,
+        )
+
+        product.stock_quantity -= item.quantity
+
+        db.add(order_item)
+
+    for item in cart_items:
+        db.delete(item)
+
+    db.commit()
+    db.refresh(order)
+
+    return {
+        "success": True,
+        "message": "Store order created successfully",
+        "order": {
+            "id": str(order.id),
+            "total_amount": order.total_amount,
+            "status": order.status,
+            "created_at": order.created_at,
+        },
+    }
+
+
+
+# ---------------------------------------------------------
+# STORE ORDER HISTORY
+# ---------------------------------------------------------
+
+@router.get("/orders")
+def list_store_orders(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_farmer),
+):
+    orders = (
+        db.query(StoreOrder)
+        .filter(
+            StoreOrder.user_id == current_user.id
+        )
+        .order_by(
+            StoreOrder.created_at.desc()
+        )
+        .all()
+    )
+
+    result = []
+
+    for order in orders:
+        items = []
+
+        for item in order.items:
+            product = (
+                db.query(Product)
+                .filter(
+                    Product.id == item.product_id
+                )
+                .first()
+            )
+
+            items.append(
+                {
+                    "id": str(item.id),
+                    "product_id": str(item.product_id),
+                    "product_name": (
+                        product.name
+                        if product
+                        else "Unknown Product"
+                    ),
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "subtotal": round(
+                        item.unit_price * item.quantity,
+                        2,
+                    ),
+                }
+            )
+
+        result.append(
+            {
+                "id": str(order.id),
+                "total_amount": order.total_amount,
+                "status": order.status,
+                "created_at": order.created_at,
+                "items": items,
+            }
+        )
+
+    return {
+        "success": True,
+        "orders": result,
+    }
+
+
+@router.get("/orders/{order_id}")
+def get_store_order(
+    order_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_farmer),
+):
+    order = (
+        db.query(StoreOrder)
+        .filter(
+            StoreOrder.id == order_id,
+            StoreOrder.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Store order not found",
+        )
+
+    items = []
+
+    for item in order.items:
+        product = (
+            db.query(Product)
+            .filter(
+                Product.id == item.product_id
+            )
+            .first()
+        )
+
+        items.append(
+            {
+                "id": str(item.id),
+                "product_id": str(item.product_id),
+                "product_name": (
+                    product.name
+                    if product
+                    else "Unknown Product"
+                ),
+                "quantity": item.quantity,
+                "unit_price": item.unit_price,
+                "subtotal": round(
+                    item.unit_price * item.quantity,
+                    2,
+                ),
+            }
+        )
+
+    return {
+        "success": True,
+        "order": {
+            "id": str(order.id),
+            "total_amount": order.total_amount,
+            "status": order.status,
+            "created_at": order.created_at,
+            "items": items,
+        },
+    }
+
+# ---------------------------------------------------------
+# AI SEED RECOMMENDATION
+# ---------------------------------------------------------
+
+@router.get("/ai/seed-recommendation")
+def recommend_seed(
+    crop: str,
+    soil_type: str,
+    season: str,
+    location: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_farmer),
+):
+    seed_category = (
+        db.query(ProductCategory)
+        .filter(
+            ProductCategory.name.ilike("Seeds")
+        )
+        .first()
+    )
+
+    if not seed_category:
+        return {
+            "success": True,
+            "title": "AGRIVA AI Recommended Seeds",
+            "recommendations": [],
+        }
+
+    products = (
+        db.query(Product)
+        .filter(
+            Product.category_id
+            == seed_category.id
+        )
+        .all()
+    )
+
+    recommendations = []
+
+    for product in products:
+        text = (
+            f"{product.name} "
+            f"{product.description or ''}"
+        ).lower()
+
+        score = 60.0
+        reasons = []
+
+        if crop.lower() in text:
+            score += 20
+            reasons.append(
+                f"Suitable for {crop}"
+            )
+
+        if soil_type.lower() in text:
+            score += 8
+            reasons.append(
+                f"Suitable for {soil_type} soil"
+            )
+
+        if season.lower() in text:
+            score += 7
+            reasons.append(
+                f"Suitable for {season} season"
+            )
+
+        if location.lower() in text:
+            score += 5
+            reasons.append(
+                f"Suitable for {location}"
+            )
+
+        score = min(
+            score,
+            99.0,
+        )
+
+        recommendations.append(
+            {
+                "product_id": str(product.id),
+                "name": product.name,
+                "price": product.price,
+                "stock_quantity": product.stock_quantity,
+                "suitability_percentage": round(
+                    score,
+                    1,
+                ),
+                "reason": (
+                    ", ".join(reasons)
+                    if reasons
+                    else
+                    "Recommended based on AGRIVA Store availability"
+                ),
+            }
+        )
+
+    recommendations.sort(
+        key=lambda item: item[
+            "suitability_percentage"
+        ],
+        reverse=True,
+    )
+
+    return {
+        "success": True,
+        "title": "AGRIVA AI Recommended Seeds",
+        "crop": crop,
+        "soil_type": soil_type,
+        "season": season,
+        "location": location,
+        "recommendations": recommendations[:5],
+    }
+
+=================================================
+FILE: .\backend\app\models\store.py
+=================================================
+import uuid
+from datetime import datetime
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db import Base
+
+
+class ProductCategory(Base):
+    __tablename__ = "product_categories"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(100),
+        unique=True,
+        nullable=False,
+    )
+
+    products = relationship(
+        "Product",
+        back_populates="category",
+    )
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    category_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("product_categories.id"),
+        nullable=False,
+        index=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    description: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    stock_quantity: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    category = relationship(
+        "ProductCategory",
+        back_populates="products",
+    )
+
+
+class Cart(Base):
+    __tablename__ = "cart"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+
+    items = relationship(
+        "CartItem",
+        back_populates="cart",
+        cascade="all, delete-orphan",
+    )
+
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    cart_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("cart.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("products.id"),
+        nullable=False,
+    )
+
+    quantity: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
+
+    cart = relationship(
+        "Cart",
+        back_populates="items",
+    )
+
+
+class StoreOrder(Base):
+    __tablename__ = "store_orders"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    total_amount: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="pending",
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    items = relationship(
+        "StoreOrderItem",
+        back_populates="order",
+        cascade="all, delete-orphan",
+    )
+
+
+class StoreOrderItem(Base):
+    __tablename__ = "store_order_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("store_orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("products.id"),
+        nullable=False,
+    )
+
+    quantity: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    unit_price: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    order = relationship(
+        "StoreOrder",
+        back_populates="items",
+    )
+
+=================================================
+FILE: .\backend\app\schemas\store.py
+=================================================
+from decimal import Decimal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class CategoryResponse(BaseModel):
+    id: UUID
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProductResponse(BaseModel):
+    id: UUID
+    category_id: UUID
+    name: str
+    description: str | None = None
+    price: Decimal
+    stock_quantity: int
+    brand: str | None = None
+    image_url: str | None = None
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CartItemCreate(BaseModel):
+    product_id: UUID
+    quantity: int = Field(default=1, ge=1)
+
+
+class CartItemUpdate(BaseModel):
+    quantity: int = Field(..., ge=1)
+
+
+class CartItemResponse(BaseModel):
+    id: UUID
+    product_id: UUID
+    quantity: int
+    product_name: str
+    unit_price: Decimal
+    subtotal: Decimal
+
+
+class CartResponse(BaseModel):
+    id: UUID
+    items: list[CartItemResponse]
+    total_items: int
+    total_amount: Decimal
+
+
+class SeedRecommendationRequest(BaseModel):
+    crop: str
+    soil_type: str
+    season: str
+    location: str
+
+
+class SeedRecommendationItem(BaseModel):
+    product_id: UUID
+    seed_name: str
+    brand: str | None = None
+    suitability_percentage: float
+    reason: str
+    price: Decimal
+
+
+class SeedRecommendationResponse(BaseModel):
+    recommendations: list[SeedRecommendationItem]
+
+=================================================
+FILE: .\backend\app\services\seed_recommendation.py
+=================================================
+from app.models.store import Product
+
+
+def calculate_seed_score(
+    product: Product,
+    crop: str,
+    soil_type: str,
+    season: str,
+    location: str,
+) -> tuple[float, str]:
+
+    score = 60.0
+    reasons = []
+
+    text = " ".join(
+        [
+            product.name or "",
+            product.description or "",
+            getattr(product, "brand", "") or "",
+        ]
+    ).lower()
+
+    crop_lower = crop.lower()
+    soil_lower = soil_type.lower()
+    season_lower = season.lower()
+    location_lower = location.lower()
+
+    if crop_lower in text:
+        score += 20
+        reasons.append(
+            f"Designed or suitable for {crop}."
+        )
+
+    if soil_lower in text:
+        score += 8
+        reasons.append(
+            f"Suitable for {soil_type} soil."
+        )
+
+    if season_lower in text:
+        score += 7
+        reasons.append(
+            f"Suitable for {season} season."
+        )
+
+    if location_lower in text:
+        score += 5
+        reasons.append(
+            f"Suitable for conditions around {location}."
+        )
+
+    if not reasons:
+        reasons.append(
+            "Recommended based on general crop suitability "
+            "and current AGRIVA Store availability."
+        )
+
+    score = min(score, 99.0)
+
+    return round(score, 1), " ".join(reasons)
+
+=================================================
+FILE: .\frontend\app\store\page.tsx
+=================================================
+import Link from "next/link";
+
+import {
+  ArrowRight,
+  Beaker,
+  Droplets,
+  Leaf,
+  PackageCheck,
+  ShieldCheck,
+  ShoppingCart,
+  Sparkles,
+  Sprout,
+  Tractor,
+  Wrench,
+} from "lucide-react";
+
+const categories = [
+  {
+    name: "Seeds",
+    description:
+      "High-quality seeds for seasonal and field crops.",
+    icon: Sprout,
+  },
+  {
+    name: "Fertilizers",
+    description:
+      "Balanced nutrition for healthier crop growth.",
+    icon: Beaker,
+  },
+  {
+    name: "Crop Protection",
+    description:
+      "Protection products for pests and diseases.",
+    icon: ShieldCheck,
+  },
+  {
+    name: "Equipment",
+    description:
+      "Reliable equipment for day-to-day farm work.",
+    icon: Tractor,
+  },
+  {
+    name: "Irrigation",
+    description:
+      "Efficient water-management essentials.",
+    icon: Droplets,
+  },
+  {
+    name: "Farming Tools",
+    description:
+      "Practical tools for field operations.",
+    icon: Wrench,
+  },
+  {
+    name: "Organic Products",
+    description:
+      "Sustainable inputs for eco-friendly farming.",
+    icon: Leaf,
+  },
+];
+
+export default function StorePage() {
+  return (
+    <main className="min-h-screen bg-slate-950">
+      <section className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-950">
+        <div className="absolute -right-28 -top-32 h-96 w-96 rounded-full bg-emerald-400/10 blur-3xl" />
+        <div className="absolute -bottom-44 left-1/3 h-96 w-96 rounded-full bg-green-400/10 blur-3xl" />
+
+        <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <Link
+              href="/dashboard/farmer"
+              className="text-sm font-bold text-emerald-300 transition hover:text-white"
+            >
+              ? Farmer Dashboard
+            </Link>
+
+            <div className="flex gap-2">
+              <Link
+                href="/store/products"
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white backdrop-blur transition hover:bg-white/10"
+              >
+                Products
+              </Link>
+
+              <Link
+                href="/store/cart"
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-slate-950 transition hover:bg-emerald-400"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Cart
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-12 grid items-end gap-8 lg:grid-cols-[1fr_360px]">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-300">
+                <Sparkles className="h-4 w-4" />
+                AGRIVA Store Intelligence
+              </div>
+
+              <h1 className="mt-5 max-w-4xl text-4xl font-black tracking-tight text-white md:text-6xl">
+                Smart farming inputs,
+                <span className="text-emerald-400">
+                  {" "}
+                  one trusted store.
+                </span>
+              </h1>
+
+              <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300 md:text-lg">
+                Discover seeds, fertilizers, crop protection,
+                irrigation products, tools and farm equipment
+                from the AGRIVA ecosystem.
+              </p>
+
+              <div className="mt-7 flex flex-wrap gap-3">
+                <Link
+                  href="/store/products"
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950/30 transition hover:bg-emerald-400"
+                >
+                  Explore Products
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+
+                <Link
+                  href="/store/checkout"
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/10"
+                >
+                  <PackageCheck className="h-4 w-4" />
+                  Checkout
+                </Link>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-white shadow-2xl shadow-black/20 backdrop-blur">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-300">
+                AGRIVA Store
+              </p>
+
+              <h2 className="mt-2 text-xl font-black">
+                Built for smarter farm purchases
+              </h2>
+
+              <div className="mt-5 space-y-4">
+                <FeatureRow
+                  icon={<ShieldCheck className="h-5 w-5" />}
+                  title="Trusted catalog"
+                  text="Farm-focused product categories"
+                />
+
+                <FeatureRow
+                  icon={<ShoppingCart className="h-5 w-5" />}
+                  title="Connected cart"
+                  text="Add products and checkout securely"
+                />
+
+                <FeatureRow
+                  icon={<Sparkles className="h-5 w-5" />}
+                  title="AGRIVA ecosystem"
+                  text="Designed for intelligent farming workflows"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        <section>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-400">
+            Shop by category
+          </p>
+
+          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-3xl font-black text-white">
+                Everything your farm needs
+              </h2>
+
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                Browse AGRIVA Store categories and move directly
+                to the searchable product catalog.
+              </p>
+            </div>
+
+            <Link
+              href="/store/products"
+              className="inline-flex items-center gap-2 text-sm font-black text-emerald-400 hover:text-emerald-300"
+            >
+              View all products
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {categories.map((category) => {
+              const Icon =
+                category.icon;
+
+              return (
+                <Link
+                  key={category.name}
+                  href="/store/products"
+                  className="group rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-black/10 transition hover:-translate-y-1 hover:border-emerald-700"
+                >
+                  <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+                    <Icon className="h-6 w-6" />
+                  </div>
+
+                  <h3 className="mt-5 text-lg font-black text-white">
+                    {category.name}
+                  </h3>
+
+                  <p className="mt-2 min-h-12 text-sm leading-6 text-slate-400">
+                    {category.description}
+                  </p>
+
+                  <div className="mt-5 flex items-center gap-2 text-sm font-black text-emerald-400">
+                    Browse
+                    <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="mt-10 overflow-hidden rounded-3xl border border-emerald-900 bg-[#063d36] p-6 text-white shadow-2xl shadow-black/20 sm:p-8">
+          <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-emerald-100">
+                <Sparkles className="h-4 w-4" />
+                AGRIVA Smart Shopping
+              </div>
+
+              <h2 className="mt-4 text-2xl font-black sm:text-3xl">
+                Buy inputs with your farm plan in mind
+              </h2>
+
+              <p className="mt-3 max-w-3xl leading-7 text-emerald-50/90">
+                Use AGRIVA insights for crop planning, quality,
+                price intelligence and farm operations—then source
+                the inputs you need from one connected store.
+              </p>
+            </div>
+
+            <Link
+              href="/store/products"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-black text-emerald-950 transition hover:bg-emerald-50"
+            >
+              Start Shopping
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function FeatureRow({
+  icon,
+  title,
+  text,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-400/10 text-emerald-300">
+        {icon}
+      </div>
+
+      <div>
+        <p className="font-bold">
+          {title}
+        </p>
+
+        <p className="mt-1 text-xs text-slate-400">
+          {text}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+=================================================
+FILE: .\frontend\app\store\products\page.tsx
+=================================================
+"use client";
+
+import Link from "next/link";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  ArrowLeft,
+  Boxes,
+  Loader2,
+  PackageSearch,
+  Search,
+  ShoppingCart,
+  Sparkles,
+  Sprout,
+} from "lucide-react";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://127.0.0.1:8000";
+
+type Product = {
+  id: string;
+  category_id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  stock_quantity: number;
+};
+
+type Category = {
+  id: string;
+  name: string;
+};
+
+export default function ProductsPage() {
+  const [
+    products,
+    setProducts,
+  ] = useState<Product[]>([]);
+
+  const [
+    categories,
+    setCategories,
+  ] = useState<Category[]>([]);
+
+  const [
+    search,
+    setSearch,
+  ] = useState("");
+
+  const [
+    categoryId,
+    setCategoryId,
+  ] = useState("");
+
+  const [
+    sort,
+    setSort,
+  ] = useState("name");
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
+
+  const [
+    addingId,
+    setAddingId,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    message,
+    setMessage,
+  ] = useState("");
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+  const queryString =
+    useMemo(() => {
+      const params =
+        new URLSearchParams();
+
+      if (search.trim()) {
+        params.set(
+          "search",
+          search.trim()
+        );
+      }
+
+      if (categoryId) {
+        params.set(
+          "category_id",
+          categoryId
+        );
+      }
+
+      params.set(
+        "sort",
+        sort
+      );
+
+      return params.toString();
+    }, [
+      search,
+      categoryId,
+      sort,
+    ]);
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const response =
+          await fetch(
+            `${API_URL}/api/store/categories`
+          );
+
+        if (!response.ok) {
+          throw new Error(
+            "Unable to load categories"
+          );
+        }
+
+        const data =
+          await response.json();
+
+        setCategories(
+          data.categories || []
+        );
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    void loadCategories();
+  }, []);
+
+  useEffect(() => {
+    const controller =
+      new AbortController();
+
+    const timer =
+      window.setTimeout(
+        async () => {
+          setLoading(true);
+          setError("");
+
+          try {
+            const response =
+              await fetch(
+                `${API_URL}/api/store/products?${queryString}`,
+                {
+                  signal:
+                    controller.signal,
+                  cache:
+                    "no-store",
+                }
+              );
+
+            if (!response.ok) {
+              throw new Error(
+                "Unable to load products"
+              );
+            }
+
+            const data =
+              await response.json();
+
+            setProducts(
+              data.products || []
+            );
+          } catch (err) {
+            if (
+              err instanceof
+                DOMException &&
+              err.name ===
+                "AbortError"
+            ) {
+              return;
+            }
+
+            setError(
+              err instanceof Error
+                ? err.message
+                : "Unable to load products"
+            );
+          } finally {
+            if (
+              !controller.signal
+                .aborted
+            ) {
+              setLoading(false);
+            }
+          }
+        },
+        250
+      );
+
+    return () => {
+      window.clearTimeout(
+        timer
+      );
+
+      controller.abort();
+    };
+  }, [queryString]);
+
+  async function addToCart(
+    productId: string
+  ) {
+    const token =
+      localStorage.getItem(
+        "access_token"
+      );
+
+    if (!token) {
+      setMessage(
+        "Please login first."
+      );
+      return;
+    }
+
+    setAddingId(productId);
+    setMessage("");
+    setError("");
+
+    try {
+      const response =
+        await fetch(
+          `${API_URL}/api/store/cart/items?product_id=${productId}&quantity=1`,
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail ||
+            "Unable to add product"
+        );
+      }
+
+      setMessage(
+        "Product added to cart."
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to add product"
+      );
+    } finally {
+      setAddingId(null);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-950">
+      <section className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-950">
+        <div className="absolute -right-24 -top-28 h-80 w-80 rounded-full bg-emerald-400/10 blur-3xl" />
+
+        <div className="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <Link
+              href="/store"
+              className="inline-flex items-center gap-2 text-sm font-bold text-emerald-300 hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              AGRIVA Store
+            </Link>
+
+            <Link
+              href="/store/cart"
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-slate-950 hover:bg-emerald-400"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Cart
+            </Link>
+          </div>
+
+          <div className="mt-9">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-300">
+              <Sparkles className="h-4 w-4" />
+              AGRIVA Store Intelligence
+            </div>
+
+            <h1 className="mt-4 text-4xl font-black tracking-tight text-white md:text-5xl">
+              Smart Farm Products
+            </h1>
+
+            <p className="mt-3 max-w-3xl text-base leading-7 text-slate-300">
+              Search, filter and compare farming products
+              from AGRIVA&apos;s connected store catalog.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-2xl shadow-black/20">
+          <div className="flex items-center gap-2">
+            <PackageSearch className="h-5 w-5 text-emerald-400" />
+
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-400">
+              Product Search
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_240px_220px]">
+            <div className="relative">
+              <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
+
+              <input
+                value={search}
+                onChange={(
+                  event
+                ) =>
+                  setSearch(
+                    event.target
+                      .value
+                  )
+                }
+                placeholder="Search seeds, fertilizers, tools..."
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 py-3 pl-10 pr-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-emerald-500"
+              />
+            </div>
+
+            <select
+              value={categoryId}
+              onChange={(
+                event
+              ) =>
+                setCategoryId(
+                  event.target.value
+                )
+              }
+              className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-slate-200 outline-none focus:border-emerald-500"
+            >
+              <option value="">
+                All categories
+              </option>
+
+              {categories.map(
+                (category) => (
+                  <option
+                    key={
+                      category.id
+                    }
+                    value={
+                      category.id
+                    }
+                  >
+                    {
+                      category.name
+                    }
+                  </option>
+                )
+              )}
+            </select>
+
+            <select
+              value={sort}
+              onChange={(
+                event
+              ) =>
+                setSort(
+                  event.target.value
+                )
+              }
+              className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-slate-200 outline-none focus:border-emerald-500"
+            >
+              <option value="name">
+                Name
+              </option>
+
+              <option value="price_low">
+                Price: Low to High
+              </option>
+
+              <option value="price_high">
+                Price: High to Low
+              </option>
+            </select>
+          </div>
+        </section>
+
+        {message && (
+          <div className="mt-5 rounded-2xl border border-emerald-800 bg-emerald-950/60 p-4 text-sm font-semibold text-emerald-200">
+            {message}
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-5 rounded-2xl border border-red-900 bg-red-950/50 p-4 text-sm font-semibold text-red-200">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-7 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-400">
+              Store Catalog
+            </p>
+
+            <h2 className="mt-1 text-2xl font-black text-white">
+              {loading
+                ? "Loading products..."
+                : `${products.length} product${
+                    products.length ===
+                    1
+                      ? ""
+                      : "s"
+                  } found`}
+            </h2>
+          </div>
+
+          <Boxes className="h-7 w-7 text-slate-600" />
+        </div>
+
+        {loading ? (
+          <div className="mt-8 flex min-h-[280px] items-center justify-center rounded-3xl border border-slate-800 bg-slate-900">
+            <div className="flex items-center gap-3 text-slate-300">
+              <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+              Loading AGRIVA products...
+            </div>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="mt-8 rounded-3xl border border-dashed border-slate-700 bg-slate-900 p-12 text-center">
+            <PackageSearch className="mx-auto h-10 w-10 text-emerald-400" />
+
+            <h3 className="mt-4 text-xl font-black text-white">
+              No products found
+            </h3>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Try changing the search term or category filter.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-7 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {products.map(
+              (product) => {
+                const inStock =
+                  product.stock_quantity >
+                  0;
+
+                return (
+                  <article
+                    key={
+                      product.id
+                    }
+                    className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-xl shadow-black/10 transition hover:-translate-y-1 hover:border-emerald-800"
+                  >
+                    <div className="relative flex h-44 items-center justify-center overflow-hidden bg-gradient-to-br from-emerald-950 to-slate-950">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.18),transparent_45%)]" />
+
+                      <Sprout className="relative h-16 w-16 text-emerald-400" />
+
+                      <span
+                        className={`absolute right-3 top-3 rounded-full px-3 py-1 text-xs font-black ${
+                          inStock
+                            ? "bg-emerald-400/15 text-emerald-300"
+                            : "bg-red-400/15 text-red-300"
+                        }`}
+                      >
+                        {inStock
+                          ? "In Stock"
+                          : "Out of Stock"}
+                      </span>
+                    </div>
+
+                    <div className="p-5">
+                      <h3 className="text-lg font-black text-white">
+                        {
+                          product.name
+                        }
+                      </h3>
+
+                      <p className="mt-2 min-h-12 text-sm leading-6 text-slate-400">
+                        {product.description ||
+                          "AGRIVA farming product"}
+                      </p>
+
+                      <div className="mt-5 flex items-end justify-between gap-3 border-t border-slate-800 pt-4">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-500">
+                            Price
+                          </p>
+
+                          <p className="mt-1 text-2xl font-black text-emerald-400">
+                            ?
+                            {Number(
+                              product.price
+                            ).toLocaleString(
+                              "en-IN"
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-xs font-semibold text-slate-500">
+                            Available
+                          </p>
+
+                          <p className="mt-1 font-black text-slate-200">
+                            {
+                              product.stock_quantity
+                            }
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void addToCart(
+                            product.id
+                          )
+                        }
+                        disabled={
+                          !inStock ||
+                          addingId ===
+                            product.id
+                        }
+                        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                      >
+                        {addingId ===
+                        product.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Adding...
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart className="h-4 w-4" />
+                            {inStock
+                              ? "Add to Cart"
+                              : "Out of Stock"}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </article>
+                );
+              }
+            )}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+=================================================
+FILE: .\frontend\app\store\cart\page.tsx
+=================================================
+import Link from "next/link";
+
+import {
+  ArrowLeft,
+  ArrowRight,
+  ShoppingBag,
+  ShoppingCart,
+  Sparkles,
+} from "lucide-react";
+
+export default function CartPage() {
+  return (
+    <main className="min-h-screen bg-slate-950">
+      <section className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-950">
+        <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-emerald-400/10 blur-3xl" />
+
+        <div className="relative mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+          <Link
+            href="/store"
+            className="inline-flex items-center gap-2 text-sm font-bold text-emerald-300 hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            AGRIVA Store
+          </Link>
+
+          <div className="mt-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-300">
+              <Sparkles className="h-4 w-4" />
+              AGRIVA Store
+            </div>
+
+            <h1 className="mt-4 text-4xl font-black text-white">
+              Your Cart
+            </h1>
+
+            <p className="mt-3 text-slate-300">
+              Review your selected farm products before checkout.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+        <section className="rounded-3xl border border-slate-800 bg-slate-900 p-7 shadow-2xl shadow-black/20">
+          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+            <ShoppingCart className="h-7 w-7" />
+          </div>
+
+          <h2 className="mt-5 text-2xl font-black text-white">
+            AGRIVA Cart
+          </h2>
+
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+            Open the product catalog to add farming products,
+            then continue to checkout to review your current cart.
+          </p>
+
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link
+              href="/store/products"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-5 py-3 text-sm font-bold text-slate-200 transition hover:border-emerald-700"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              Browse Products
+            </Link>
+
+            <Link
+              href="/store/checkout"
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400"
+            >
+              Review Cart & Checkout
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+=================================================
+FILE: .\frontend\app\store\checkout\page.tsx
+=================================================
+"use client";
+
+import Link from "next/link";
+
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  ArrowLeft,
+  CheckCircle,
+  Loader2,
+  LockKeyhole,
+  PackageCheck,
+  ShoppingBag,
+  Sparkles,
+} from "lucide-react";
+
+import {
+  useRouter,
+} from "next/navigation";
+
+import {
+  useTranslations,
+} from "next-intl";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://127.0.0.1:8000";
+
+type CartItem = {
+  id: string;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+};
+
+type Cart = {
+  id: string;
+  items: CartItem[];
+  total?: number;
+  total_amount?: number;
+};
+
+export default function CheckoutPage() {
+  const router =
+    useRouter();
+
+  const t =
+    useTranslations(
+      "checkoutPage"
+    );
+
+  const [
+    cart,
+    setCart,
+  ] = useState<Cart | null>(
+    null
+  );
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    checkingOut,
+    setCheckingOut,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+  const [
+    success,
+    setSuccess,
+  ] = useState(false);
+
+  useEffect(() => {
+    async function loadCart() {
+      const token =
+        localStorage.getItem(
+          "access_token"
+        );
+
+      if (!token) {
+        setError(
+          t("loginError")
+        );
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response =
+          await fetch(
+            `${API_URL}/api/store/cart`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+              cache:
+                "no-store",
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.detail ||
+              t(
+                "loadCartError"
+              )
+          );
+        }
+
+        setCart(data.cart);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : t(
+                "loadCartError"
+              )
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadCart();
+  }, [t]);
+
+  const calculatedTotal =
+    cart?.items.reduce(
+      (
+        sum,
+        item
+      ) =>
+        sum +
+        item.subtotal,
+      0
+    ) ?? 0;
+
+  async function handleCheckout() {
+    const token =
+      localStorage.getItem(
+        "access_token"
+      );
+
+    if (!token) {
+      setError(
+        t("loginError")
+      );
+      return;
+    }
+
+    if (
+      !cart ||
+      cart.items.length === 0
+    ) {
+      setError(
+        t("emptyCart")
+      );
+      return;
+    }
+
+    setCheckingOut(true);
+    setError("");
+
+    try {
+      const response =
+        await fetch(
+          `${API_URL}/api/store/checkout`,
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail ||
+            t(
+              "checkoutFailed"
+            )
+        );
+      }
+
+      setSuccess(true);
+
+      setCart({
+        ...cart,
+        items: [],
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t(
+              "checkoutFailed"
+            )
+      );
+    } finally {
+      setCheckingOut(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950">
+        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-slate-200 backdrop-blur">
+          <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+          {t("loading")}
+        </div>
+      </main>
+    );
+  }
+
+  if (success) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6">
+        <div className="w-full max-w-lg rounded-3xl border border-emerald-900 bg-slate-900 p-8 text-center shadow-2xl shadow-black/30">
+          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-500/10">
+            <CheckCircle className="h-12 w-12 text-emerald-400" />
+          </div>
+
+          <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-emerald-800 bg-emerald-950/60 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-emerald-300">
+            <PackageCheck className="h-4 w-4" />
+            Order Confirmed
+          </div>
+
+          <h1 className="mt-4 text-3xl font-black text-white">
+            {t("orderPlaced")}
+          </h1>
+
+          <p className="mt-3 leading-7 text-slate-400">
+            {t("orderSuccess")}
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              router.push(
+                "/store"
+              )
+            }
+            className="mt-7 rounded-xl bg-emerald-500 px-6 py-3 font-black text-slate-950 transition hover:bg-emerald-400"
+          >
+            {t(
+              "continueShopping"
+            )}
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-950">
+      <section className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-950">
+        <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-emerald-400/10 blur-3xl" />
+
+        <div className="relative mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+          <Link
+            href="/store/cart"
+            className="inline-flex items-center gap-2 text-sm font-bold text-emerald-300 hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {t("backToCart")}
+          </Link>
+
+          <div className="mt-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-300">
+              <Sparkles className="h-4 w-4" />
+              Secure AGRIVA Checkout
+            </div>
+
+            <h1 className="mt-4 text-4xl font-black text-white">
+              {t("title")}
+            </h1>
+
+            <p className="mt-3 text-slate-300">
+              {t("subtitle")}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+        {error && (
+          <div className="mb-6 rounded-2xl border border-red-900 bg-red-950/50 p-4 text-sm font-semibold text-red-200">
+            {error}
+          </div>
+        )}
+
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl shadow-black/20">
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+                <ShoppingBag className="h-5 w-5" />
+              </div>
+
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-400">
+                  AGRIVA Store
+                </p>
+
+                <h2 className="mt-1 text-xl font-black text-white">
+                  {t(
+                    "orderSummary"
+                  )}
+                </h2>
+              </div>
+            </div>
+
+            {!cart ||
+            cart.items.length ===
+              0 ? (
+              <div className="py-12 text-center">
+                <ShoppingBag className="mx-auto h-10 w-10 text-slate-600" />
+
+                <p className="mt-4 text-slate-400">
+                  {t(
+                    "emptyCart"
+                  )}
+                </p>
+
+                <Link
+                  href="/store/products"
+                  className="mt-5 inline-flex rounded-xl bg-emerald-500 px-5 py-3 text-sm font-black text-slate-950 hover:bg-emerald-400"
+                >
+                  {t(
+                    "browseProducts"
+                  )}
+                </Link>
+              </div>
+            ) : (
+              <div className="mt-6 divide-y divide-slate-800">
+                {cart.items.map(
+                  (item) => (
+                    <div
+                      key={
+                        item.id
+                      }
+                      className="flex items-center justify-between gap-4 py-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-white">
+                          {
+                            item.product_name
+                          }
+                        </p>
+
+                        <p className="mt-1 text-sm text-slate-400">
+                          ?
+                          {Number(
+                            item.unit_price
+                          ).toLocaleString(
+                            "en-IN"
+                          )}{" "}
+                          ×{" "}
+                          {
+                            item.quantity
+                          }
+                        </p>
+                      </div>
+
+                      <p className="font-black text-emerald-400">
+                        ?
+                        {Number(
+                          item.subtotal
+                        ).toLocaleString(
+                          "en-IN"
+                        )}
+                      </p>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+          </section>
+
+          <aside className="h-fit rounded-3xl border border-emerald-900 bg-[#063d36] p-6 text-white shadow-2xl shadow-black/20">
+            <div className="flex items-center gap-2 text-emerald-200">
+              <LockKeyhole className="h-4 w-4" />
+
+              <span className="text-xs font-black uppercase tracking-[0.14em]">
+                Secure Summary
+              </span>
+            </div>
+
+            <div className="mt-5 flex items-end justify-between gap-4 border-b border-white/10 pb-5">
+              <span className="text-sm text-emerald-100/80">
+                {t("total")}
+              </span>
+
+              <span className="text-3xl font-black">
+                ?
+                {calculatedTotal.toLocaleString(
+                  "en-IN",
+                  {
+                    maximumFractionDigits:
+                      2,
+                  }
+                )}
+              </span>
+            </div>
+
+            <p className="mt-4 text-xs leading-6 text-emerald-50/70">
+              Review quantities and prices before placing your AGRIVA Store order.
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                void handleCheckout()
+              }
+              disabled={
+                checkingOut ||
+                !cart ||
+                cart.items.length ===
+                  0
+              }
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-black text-emerald-950 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {checkingOut && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+
+              {checkingOut
+                ? t(
+                    "placingOrder"
+                  )
+                : t(
+                    "placeOrder"
+                  )}
+            </button>
+          </aside>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+=================================================
+FILE: .\frontend\app\store\orders\page.tsx
+=================================================
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Loader2,
+  PackageCheck,
+  ShoppingBag,
+} from "lucide-react";
+import { useTranslations } from "next-intl";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://127.0.0.1:8000";
+
+type OrderItem = {
+  id: string;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+};
+
+type StoreOrder = {
+  id: string;
+  total_amount: number;
+  status: string;
+  created_at: string;
+  items: OrderItem[];
+};
+
+export default function StoreOrdersPage() {
+  const t = useTranslations("storeOrdersPage");
+
+  const [orders, setOrders] =
+    useState<StoreOrder[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
+  useEffect(() => {
+    async function loadOrders() {
+      const token =
+        localStorage.getItem("access_token");
+
+      if (!token) {
+        setError(t("loadError"));
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${API_URL}/api/store/orders`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            typeof data?.detail === "string"
+              ? data.detail
+              : t("loadError")
+          );
+        }
+
+        setOrders(
+          Array.isArray(data?.orders)
+            ? data.orders
+            : []
+        );
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : t("loadError")
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadOrders();
+  }, [t]);
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="flex items-center gap-3 text-slate-600">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          {t("loading")}
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-6xl px-6 py-8">
+        <Link
+          href="/store"
+          className="inline-flex items-center gap-2 text-slate-600 hover:text-green-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {t("backToStore")}
+        </Link>
+
+        <div className="mt-8">
+          <div className="flex items-center gap-3">
+            <ShoppingBag className="h-8 w-8 text-green-700" />
+
+            <h1 className="text-3xl font-bold text-slate-900">
+              {t("title")}
+            </h1>
+          </div>
+
+          <p className="mt-2 text-slate-600">
+            {t("subtitle")}
+          </p>
+        </div>
+
+        {error && (
+          <div className="mt-6 rounded-xl bg-red-50 p-4 text-red-700">
+            {error}
+          </div>
+        )}
+
+        {orders.length === 0 ? (
+          <div className="mt-8 rounded-2xl border bg-white p-10 text-center shadow-sm">
+            <PackageCheck className="mx-auto h-12 w-12 text-slate-300" />
+
+            <p className="mt-4 text-slate-500">
+              {t("empty")}
+            </p>
+
+            <Link
+              href="/store/products"
+              className="mt-6 inline-flex rounded-xl bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800"
+            >
+              {t("continueShopping")}
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-8 space-y-6">
+            {orders.map((order) => (
+              <article
+                key={order.id}
+                className="rounded-2xl border bg-white p-6 shadow-sm"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs text-slate-500">
+                      {t("orderId")}
+                    </p>
+
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {order.id}
+                    </p>
+
+                    <p className="mt-2 text-sm text-slate-500">
+                      {t("date")}:{" "}
+                      {new Date(
+                        order.created_at
+                      ).toLocaleString()}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-700">
+                      {order.status === "pending"
+                        ? t("pending")
+                        : order.status}
+                    </span>
+
+                    <p className="mt-3 text-2xl font-bold text-green-700">
+                      ?{Number(
+                        order.total_amount
+                      ).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 overflow-hidden rounded-xl border">
+                  <div className="grid grid-cols-4 gap-3 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500">
+                    <span>{t("items")}</span>
+                    <span>{t("quantity")}</span>
+                    <span>{t("price")}</span>
+                    <span className="text-right">
+                      {t("subtotal")}
+                    </span>
+                  </div>
+
+                  <div className="divide-y">
+                    {order.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="grid grid-cols-4 gap-3 px-4 py-4 text-sm"
+                      >
+                        <span className="font-medium">
+                          {item.product_name}
+                        </span>
+
+                        <span>
+                          {item.quantity}
+                        </span>
+
+                        <span>
+                          ?{Number(
+                            item.unit_price
+                          ).toFixed(2)}
+                        </span>
+
+                        <span className="text-right font-semibold">
+                          ?{Number(
+                            item.subtotal
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+=================================================
+STORE ROUTES
+=================================================
+/api/store/health ['GET']
+/api/store/categories ['GET']
+/api/store/products ['GET']
+/api/store/products/{product_id} ['GET']
+/api/store/cart ['GET']
+/api/store/cart/items ['POST']
+/api/store/cart/items/{item_id} ['PATCH']
+/api/store/cart/items/{item_id} ['DELETE']
+/api/store/checkout ['POST']
+/api/store/orders ['GET']
+/api/store/orders/{order_id} ['GET']
+/api/store/ai/seed-recommendation ['GET']

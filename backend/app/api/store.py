@@ -1,4 +1,4 @@
-from uuid import UUID
+﻿from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import asc, desc, or_
@@ -580,6 +580,136 @@ def checkout(
         },
     }
 
+
+
+# ---------------------------------------------------------
+# STORE ORDER HISTORY
+# ---------------------------------------------------------
+
+@router.get("/orders")
+def list_store_orders(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_farmer),
+):
+    orders = (
+        db.query(StoreOrder)
+        .filter(
+            StoreOrder.user_id == current_user.id
+        )
+        .order_by(
+            StoreOrder.created_at.desc()
+        )
+        .all()
+    )
+
+    result = []
+
+    for order in orders:
+        items = []
+
+        for item in order.items:
+            product = (
+                db.query(Product)
+                .filter(
+                    Product.id == item.product_id
+                )
+                .first()
+            )
+
+            items.append(
+                {
+                    "id": str(item.id),
+                    "product_id": str(item.product_id),
+                    "product_name": (
+                        product.name
+                        if product
+                        else "Unknown Product"
+                    ),
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "subtotal": round(
+                        item.unit_price * item.quantity,
+                        2,
+                    ),
+                }
+            )
+
+        result.append(
+            {
+                "id": str(order.id),
+                "total_amount": order.total_amount,
+                "status": order.status,
+                "created_at": order.created_at,
+                "items": items,
+            }
+        )
+
+    return {
+        "success": True,
+        "orders": result,
+    }
+
+
+@router.get("/orders/{order_id}")
+def get_store_order(
+    order_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_farmer),
+):
+    order = (
+        db.query(StoreOrder)
+        .filter(
+            StoreOrder.id == order_id,
+            StoreOrder.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Store order not found",
+        )
+
+    items = []
+
+    for item in order.items:
+        product = (
+            db.query(Product)
+            .filter(
+                Product.id == item.product_id
+            )
+            .first()
+        )
+
+        items.append(
+            {
+                "id": str(item.id),
+                "product_id": str(item.product_id),
+                "product_name": (
+                    product.name
+                    if product
+                    else "Unknown Product"
+                ),
+                "quantity": item.quantity,
+                "unit_price": item.unit_price,
+                "subtotal": round(
+                    item.unit_price * item.quantity,
+                    2,
+                ),
+            }
+        )
+
+    return {
+        "success": True,
+        "order": {
+            "id": str(order.id),
+            "total_amount": order.total_amount,
+            "status": order.status,
+            "created_at": order.created_at,
+            "items": items,
+        },
+    }
 
 # ---------------------------------------------------------
 # AI SEED RECOMMENDATION

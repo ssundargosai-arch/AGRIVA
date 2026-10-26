@@ -24,6 +24,7 @@ import {
   Store,
   Truck,
   User,
+  Users,
   WalletCards,
   Wheat,
   X,
@@ -32,6 +33,17 @@ import {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://127.0.0.1:8000";
+
+function getToken() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return (
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("token")
+  );
+}
 
 /* =========================================================
    TYPES
@@ -165,6 +177,9 @@ export default function BuyerDashboardPage() {
   const [error, setError] =
     useState("");
 
+  const [theme, setTheme] =
+    useState<"light" | "dark">("light");
+
   /* -------------------------------------------------------
      ORDER MODAL
   ------------------------------------------------------- */
@@ -273,14 +288,49 @@ export default function BuyerDashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const savedTheme =
+      localStorage.getItem("agriva_theme");
+
+    if (
+      savedTheme === "light" ||
+      savedTheme === "dark"
+    ) {
+      setTheme(savedTheme);
+      return;
+    }
+
+    setTheme(
+      window.matchMedia?.(
+        "(prefers-color-scheme: dark)"
+      ).matches
+        ? "dark"
+        : "light"
+    );
+  }, []);
+
+  function toggleTheme() {
+    setTheme((current) => {
+      const next =
+        current === "dark"
+          ? "light"
+          : "dark";
+
+      localStorage.setItem(
+        "agriva_theme",
+        next
+      );
+
+      return next;
+    });
+  }
+
   async function initializeDashboard() {
     setLoading(true);
     setError("");
 
     const token =
-      localStorage.getItem(
-        "access_token"
-      );
+      getToken();
 
     if (!token) {
       router.replace("/login");
@@ -307,13 +357,23 @@ export default function BuyerDashboardPage() {
       const me: UserData =
         await response.json();
 
-      if (
-        String(me.role).toUpperCase() !==
-        "BUYER"
-      ) {
-        setError(
-          "Buyer account required."
-        );
+      const role =
+        String(me.role).toUpperCase();
+
+      if (role !== "BUYER") {
+        setUser(null);
+
+        if (role === "FARMER") {
+          router.replace(
+            "/dashboard/farmer"
+          );
+        } else if (role === "ADMIN") {
+          router.replace(
+            "/dashboard/admin"
+          );
+        } else {
+          router.replace("/login");
+        }
 
         return;
       }
@@ -341,9 +401,7 @@ export default function BuyerDashboardPage() {
   ) {
     const token =
       suppliedToken ||
-      localStorage.getItem(
-        "access_token"
-      );
+      getToken();
 
     if (!token) {
       return;
@@ -506,9 +564,7 @@ export default function BuyerDashboardPage() {
     listingId: string
   ) {
     const token =
-      localStorage.getItem(
-        "access_token"
-      );
+      getToken();
 
     if (!token) {
       router.replace("/login");
@@ -585,9 +641,7 @@ export default function BuyerDashboardPage() {
 
   async function placeOrder() {
     const token =
-      localStorage.getItem(
-        "access_token"
-      );
+      getToken();
 
     if (!token) {
       router.replace("/login");
@@ -695,9 +749,7 @@ export default function BuyerDashboardPage() {
 
   async function payForOrder() {
     const token =
-      localStorage.getItem(
-        "access_token"
-      );
+      getToken();
 
     if (!token || !payingOrder) {
       return;
@@ -811,9 +863,7 @@ export default function BuyerDashboardPage() {
     payment: Payment
   ) {
     const token =
-      localStorage.getItem(
-        "access_token"
-      );
+      getToken();
 
     if (!token) {
       return;
@@ -907,9 +957,7 @@ export default function BuyerDashboardPage() {
 
   async function bookTransport() {
     const token =
-      localStorage.getItem(
-        "access_token"
-      );
+      getToken();
 
     if (
       !token ||
@@ -1026,9 +1074,7 @@ export default function BuyerDashboardPage() {
     newStatus: TransportStatus
   ) {
     const token =
-      localStorage.getItem(
-        "access_token"
-      );
+      getToken();
 
     if (!token) {
       return;
@@ -1099,9 +1145,7 @@ export default function BuyerDashboardPage() {
     order: Order
   ) {
     const token =
-      localStorage.getItem(
-        "access_token"
-      );
+      getToken();
 
     if (!token) {
       router.replace("/login");
@@ -1178,6 +1222,9 @@ export default function BuyerDashboardPage() {
     localStorage.removeItem(
       "refresh_token"
     );
+
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
 
     router.replace("/login");
   }
@@ -1296,17 +1343,37 @@ export default function BuyerDashboardPage() {
     );
   }
 
+  if (!user) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-emerald-600" />
+
+          <p className="mt-4 text-slate-500">
+            Redirecting to your dashboard...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   /* =========================================================
      UI
   ========================================================= */
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main
+      className={`agriva-role-dashboard agriva-buyer min-h-screen ${
+        theme === "dark"
+          ? "agriva-dark bg-slate-950 text-slate-100"
+          : "bg-[#f6f8f5] text-slate-900"
+      }`}
+    >
       {/* =====================================================
           HEADER
       ===================================================== */}
 
-      <header className="border-b border-slate-200 bg-white">
+      <header className="agriva-role-topbar border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
           <button
             onClick={() =>
@@ -1336,6 +1403,21 @@ export default function BuyerDashboardPage() {
             </div>
 
             <button
+              type="button"
+              onClick={toggleTheme}
+              title={
+                theme === "dark"
+                  ? "Light mode"
+                  : "Dark mode"
+              }
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+            >
+              {theme === "dark"
+                ? "☀️ Light"
+                : "🌙 Dark"}
+            </button>
+
+            <button
               onClick={logout}
               title="Logout"
               className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-100"
@@ -1345,6 +1427,32 @@ export default function BuyerDashboardPage() {
           </div>
         </div>
       </header>
+
+      <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+        <section className="agriva-role-hero relative overflow-hidden rounded-[28px] border border-emerald-100 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/78 to-white/15" />
+
+          <div className="relative z-10 max-w-3xl px-6 py-9 sm:px-8">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+              AGRIVA Market Intelligence
+            </p>
+
+            <h1 className="mt-3 text-3xl font-black text-slate-950 sm:text-4xl">
+              Welcome, {user?.full_name || "AGRIVA Buyer"} 🛒
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+              Discover trusted farm produce, track orders, payments and transport — all from one sustainable marketplace.
+            </p>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <span className="agriva-role-badge">🌾 Direct from Farmers</span>
+              <span className="agriva-role-badge">🤖 AI Assisted</span>
+              <span className="agriva-role-badge">♻️ Sustainable Supply</span>
+            </div>
+          </div>
+        </section>
+      </div>
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* =================================================
@@ -1361,6 +1469,13 @@ export default function BuyerDashboardPage() {
             payments, transport and
             Phase 11 order tracking.
           </p>
+
+          <a
+            href="/dashboard/buyer/verification"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-800 transition hover:bg-emerald-100"
+          >
+            ✓ Buyer Verification
+          </a>
 
           {error && (
             <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -1425,6 +1540,19 @@ export default function BuyerDashboardPage() {
                 AGRIVA farmers.
               </p>
             </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                router.push(
+                  "/dashboard/buyer/fpo"
+                )
+              }
+              className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-800 hover:bg-blue-100"
+            >
+              <Users className="h-4 w-4" />
+              FPO Bulk Lots
+            </button>
 
             <button
               onClick={() =>
@@ -2464,6 +2592,94 @@ export default function BuyerDashboardPage() {
           </div>
         </div>
       )}
+
+      <style jsx global>{`
+        .agriva-role-dashboard {
+          background:
+            radial-gradient(circle at 85% 0%, rgba(20,184,166,.07), transparent 34%),
+            #f6f8f5;
+        }
+
+        .agriva-role-topbar {
+          background: rgba(255,255,255,.92) !important;
+          backdrop-filter: blur(16px);
+        }
+
+        .agriva-role-hero {
+          min-height: 240px;
+          background:
+            url("/images/agriva-farm-hero.svg")
+            center 48% / cover no-repeat;
+        }
+
+        .agriva-role-badge {
+          display: inline-flex;
+          border: 1px solid rgba(16,185,129,.18);
+          border-radius: 9999px;
+          background: rgba(255,255,255,.84);
+          padding: .5rem .8rem;
+          font-size: .75rem;
+          font-weight: 800;
+          color: #166534;
+          box-shadow: 0 5px 18px rgba(15,118,110,.06);
+        }
+
+        .agriva-role-stat {
+          position: relative;
+          overflow: hidden;
+          box-shadow: 0 10px 28px rgba(15,77,45,.05);
+        }
+
+        .agriva-role-stat::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 4px;
+          background: linear-gradient(180deg,#22c55e,#0ea5e9);
+        }
+
+        .agriva-role-dashboard.agriva-dark {
+          background: #07120d !important;
+          color: #e8f3eb !important;
+        }
+
+        .agriva-dark .agriva-role-topbar,
+        .agriva-dark .bg-white,
+        .agriva-dark .agriva-role-stat {
+          background: #0d2015 !important;
+          border-color: #244734 !important;
+        }
+
+        .agriva-dark .agriva-role-hero {
+          box-shadow: inset 0 0 0 999px rgba(3,18,10,.23);
+        }
+
+        .agriva-dark .text-slate-950,
+        .agriva-dark .text-slate-900,
+        .agriva-dark .text-slate-800,
+        .agriva-dark .text-slate-700 {
+          color: #edf8f0 !important;
+        }
+
+        .agriva-dark .text-slate-600,
+        .agriva-dark .text-slate-500,
+        .agriva-dark .text-slate-400 {
+          color: #9fb9a6 !important;
+        }
+
+        .agriva-dark .bg-slate-50,
+        .agriva-dark .bg-slate-100 {
+          background: #122a1b !important;
+        }
+
+        .agriva-dark .border-slate-100,
+        .agriva-dark .border-slate-200,
+        .agriva-dark .border-emerald-100 {
+          border-color: #28513a !important;
+        }
+      `}</style>
     </main>
   );
 }
@@ -2565,7 +2781,7 @@ function StatCard({
   icon: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl bg-white p-5 shadow-sm">
+    <div className="agriva-role-stat rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
       <p className="text-sm text-slate-500">
         {label}
       </p>
@@ -2580,6 +2796,7 @@ function StatCard({
     </div>
   );
 }
+
 
 /* =========================================================
    INFO BOX

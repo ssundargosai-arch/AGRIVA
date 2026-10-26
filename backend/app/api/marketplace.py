@@ -15,21 +15,39 @@ from app.api.dependencies import (
     require_farmer,
 )
 from app.db.session import get_db
+
 from app.models.crop import Crop
+from app.models.farm import (
+    Farm,
+    FarmField,
+)
 from app.models.market import (
     Buyer,
     BuyerMatch,
     CropListing,
     Favorite,
 )
-from app.models.user import User
+from app.models.user import (
+    BuyerProfile,
+    FarmerProfile,
+    User,
+)
+
 from app.schemas.marketplace import (
+    BuyerMatchBreakdownResponse,
     BuyerMatchItem,
     BuyerMatchResponse,
     CropListingCreate,
     CropListingResponse,
     FavoriteResponse,
     MessageResponse,
+)
+
+from app.services.buyer_matching import (
+    calculate_buyer_match,
+)
+from app.services.buyer_verification import (
+    verification_snapshot_for_profile,
 )
 
 
@@ -40,8 +58,9 @@ router = APIRouter(
 
 
 # =========================================================
-# HELPER: SERIALIZE MARKETPLACE LISTING
+# LISTING SERIALIZER
 # =========================================================
+
 
 def serialize_listing(
     listing: CropListing,
@@ -53,7 +72,9 @@ def serialize_listing(
         crop=crop.name,
         quantity_kg=listing.quantity_kg,
         quality_grade=listing.quality_grade,
-        expected_price_per_kg=listing.expected_price_per_kg,
+        expected_price_per_kg=(
+            listing.expected_price_per_kg
+        ),
         location=listing.location,
         harvest_date=listing.harvest_date,
         images=listing.images or [],
@@ -63,169 +84,137 @@ def serialize_listing(
 
 
 # =========================================================
-# HELPER: BUYER MATCH SCORE
+# FARMER OWNERSHIP HELPERS
 # =========================================================
 
-def calculate_buyer_match(
-    listing_crop: str,
-    listing_quantity: float,
-    listing_price: float,
-    listing_quality: str,
-    buyer_crop: str,
-    buyer_quantity: float,
-    buyer_price: float,
-    buyer_quality: str,
-    distance_km: float,
-    buyer_rating: float,
-) -> float:
-    """
-    Calculate buyer match percentage.
 
-    Score:
-        Crop match       = 30
-        Quantity match   = 20
-        Price match      = 20
-        Quality match    = 15
-        Distance         = 10
-        Buyer rating     = 5
-
-    Maximum score = 100
-    """
-
-    score = 0.0
-
-    # -----------------------------------------------------
-    # 1. Crop match - 30 points
-    # -----------------------------------------------------
-
-    listing_crop_clean = (listing_crop or "").strip().lower()
-    buyer_crop_clean = (buyer_crop or "").strip().lower()
-
-    if (
-        listing_crop_clean
-        and buyer_crop_clean
-        and listing_crop_clean == buyer_crop_clean
-    ):
-        score += 30.0
-
-    elif (
-        listing_crop_clean
-        and buyer_crop_clean
-        and (
-            listing_crop_clean in buyer_crop_clean
-            or buyer_crop_clean in listing_crop_clean
+def get_farmer_profile(
+    db: Session,
+    current_user: User,
+) -> FarmerProfile:
+    farmer_profile = (
+        db.query(FarmerProfile)
+        .filter(
+            FarmerProfile.user_id
+            == current_user.id
         )
-    ):
-        score += 20.0
-
-    # -----------------------------------------------------
-    # 2. Quantity match - 20 points
-    # -----------------------------------------------------
-
-    listing_quantity = float(listing_quantity or 0)
-    buyer_quantity = float(buyer_quantity or 0)
-
-    if listing_quantity > 0 and buyer_quantity > 0:
-        quantity_ratio = min(
-            listing_quantity,
-            buyer_quantity,
-        ) / max(
-            listing_quantity,
-            buyer_quantity,
-        )
-
-        score += quantity_ratio * 20.0
-
-    # -----------------------------------------------------
-    # 3. Price match - 20 points
-    # -----------------------------------------------------
-
-    listing_price = float(listing_price or 0)
-    buyer_price = float(buyer_price or 0)
-
-    if listing_price > 0 and buyer_price > 0:
-
-        # Buyer offer is equal to or greater than
-        # farmer expected price.
-        if buyer_price >= listing_price:
-            score += 20.0
-
-        else:
-            price_ratio = buyer_price / listing_price
-            score += price_ratio * 20.0
-
-    # -----------------------------------------------------
-    # 4. Quality match - 15 points
-    # -----------------------------------------------------
-
-    listing_quality_clean = (
-        listing_quality or ""
-    ).strip().lower()
-
-    buyer_quality_clean = (
-        buyer_quality or ""
-    ).strip().lower()
-
-    if (
-        listing_quality_clean
-        and buyer_quality_clean
-        and listing_quality_clean == buyer_quality_clean
-    ):
-        score += 15.0
-
-    elif (
-        listing_quality_clean
-        and buyer_quality_clean
-        and (
-            listing_quality_clean in buyer_quality_clean
-            or buyer_quality_clean in listing_quality_clean
-        )
-    ):
-        score += 10.0
-
-    # -----------------------------------------------------
-    # 5. Distance score - 10 points
-    # -----------------------------------------------------
-
-    distance_km = float(distance_km or 0)
-
-    if distance_km <= 10:
-        score += 10.0
-
-    elif distance_km <= 25:
-        score += 8.0
-
-    elif distance_km <= 50:
-        score += 6.0
-
-    elif distance_km <= 100:
-        score += 4.0
-
-    elif distance_km <= 200:
-        score += 2.0
-
-    # -----------------------------------------------------
-    # 6. Buyer rating - 5 points
-    # -----------------------------------------------------
-
-    buyer_rating = float(buyer_rating or 0)
-
-    buyer_rating = max(
-        0.0,
-        min(buyer_rating, 5.0),
+        .first()
     )
 
-    score += buyer_rating
+    if farmer_profile is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail="Farmer profile not found",
+        )
 
-    # Never allow score above 100
-    score = min(score, 100.0)
+    return farmer_profile
 
-    return round(score, 2)
+
+def get_owned_crop(
+    db: Session,
+    current_user: User,
+    crop_id: UUID,
+) -> Crop:
+    farmer_profile = get_farmer_profile(
+        db,
+        current_user,
+    )
+
+    crop = (
+        db.query(Crop)
+        .join(
+            FarmField,
+            Crop.field_id
+            == FarmField.id,
+        )
+        .join(
+            Farm,
+            FarmField.farm_id
+            == Farm.id,
+        )
+        .filter(
+            Crop.id == crop_id,
+            Farm.farmer_id
+            == farmer_profile.id,
+        )
+        .first()
+    )
+
+    if crop is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail=(
+                "Crop not found or does not "
+                "belong to the current farmer"
+            ),
+        )
+
+    return crop
+
+
+def get_owned_listing(
+    db: Session,
+    current_user: User,
+    listing_id: UUID,
+) -> tuple[CropListing, Crop]:
+    farmer_profile = get_farmer_profile(
+        db,
+        current_user,
+    )
+
+    row = (
+        db.query(
+            CropListing,
+            Crop,
+        )
+        .join(
+            Crop,
+            Crop.id
+            == CropListing.crop_id,
+        )
+        .join(
+            FarmField,
+            Crop.field_id
+            == FarmField.id,
+        )
+        .join(
+            Farm,
+            FarmField.farm_id
+            == Farm.id,
+        )
+        .filter(
+            CropListing.id
+            == listing_id,
+            Farm.farmer_id
+            == farmer_profile.id,
+        )
+        .first()
+    )
+
+    if row is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail=(
+                "Listing not found or does not "
+                "belong to the current farmer"
+            ),
+        )
+
+    listing, crop = row
+
+    return listing, crop
 
 
 # =========================================================
 # HEALTH CHECK
 # =========================================================
+
 
 @router.get("/health")
 def marketplace_health():
@@ -233,6 +222,9 @@ def marketplace_health():
         "status": "ok",
         "module": "AGRIVA Marketplace",
         "phase": 10,
+        "buyer_matching": True,
+        "explainable_matching": True,
+        "farmer_ownership_security": True,
     }
 
 
@@ -240,6 +232,7 @@ def marketplace_health():
 # CREATE LISTING
 # FARMER ONLY
 # =========================================================
+
 
 @router.post(
     "/listings",
@@ -249,30 +242,43 @@ def marketplace_health():
 def create_listing(
     payload: CropListingCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_farmer),
+    current_user: User = Depends(
+        require_farmer,
+    ),
 ):
-    crop = (
-        db.query(Crop)
-        .filter(Crop.id == payload.crop_id)
-        .first()
+    crop = get_owned_crop(
+        db,
+        current_user,
+        payload.crop_id,
     )
 
-    if crop is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Crop not found",
-        )
+    validated_price = validate_market_price(
+        crop_name=crop.name,
+        price_per_kg=(
+            payload.expected_price_per_kg
+        ),
+    )
 
     listing = CropListing(
         crop_id=crop.id,
-        quantity_kg=payload.quantity_kg,
-        expected_price_per_kg=(
-            payload.expected_price_per_kg
+        quantity_kg=(
+            payload.quantity_kg
         ),
-        quality_grade=payload.quality_grade.strip(),
-        location=payload.location.strip(),
-        harvest_date=payload.harvest_date,
-        images=payload.images or [],
+        expected_price_per_kg=(
+            validated_price
+        ),
+        quality_grade=(
+            payload.quality_grade.strip()
+        ),
+        location=(
+            payload.location.strip()
+        ),
+        harvest_date=(
+            payload.harvest_date
+        ),
+        images=(
+            payload.images or []
+        ),
         status="active",
     )
 
@@ -285,8 +291,13 @@ def create_listing(
         db.rollback()
 
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unable to create marketplace listing.",
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail=(
+                "Unable to create "
+                "marketplace listing."
+            ),
         ) from exc
 
     return serialize_listing(
@@ -299,48 +310,53 @@ def create_listing(
 # SEARCH / FILTER LISTINGS
 # =========================================================
 
+
 @router.get(
     "/listings",
-    response_model=list[CropListingResponse],
+    response_model=list[
+        CropListingResponse
+    ],
 )
 def get_listings(
-    crop: str | None = Query(default=None),
-    location: str | None = Query(default=None),
-    quality: str | None = Query(default=None),
-
+    crop: str | None = Query(
+        default=None,
+    ),
+    location: str | None = Query(
+        default=None,
+    ),
+    quality: str | None = Query(
+        default=None,
+    ),
     min_quantity: float | None = Query(
         default=None,
         ge=0,
     ),
-
     max_quantity: float | None = Query(
         default=None,
         ge=0,
     ),
-
     min_price: float | None = Query(
         default=None,
         ge=0,
     ),
-
     max_price: float | None = Query(
         default=None,
         ge=0,
     ),
-
     db: Session = Depends(get_db),
 ):
-    # Validate ranges
     if (
         min_quantity is not None
         and max_quantity is not None
         and min_quantity > max_quantity
     ):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=(
+                status.HTTP_400_BAD_REQUEST
+            ),
             detail=(
-                "min_quantity cannot be greater "
-                "than max_quantity"
+                "min_quantity cannot be "
+                "greater than max_quantity"
             ),
         )
 
@@ -350,10 +366,12 @@ def get_listings(
         and min_price > max_price
     ):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=(
+                status.HTTP_400_BAD_REQUEST
+            ),
             detail=(
-                "min_price cannot be greater "
-                "than max_price"
+                "min_price cannot be "
+                "greater than max_price"
             ),
         )
 
@@ -364,26 +382,32 @@ def get_listings(
         )
         .join(
             Crop,
-            Crop.id == CropListing.crop_id,
+            Crop.id
+            == CropListing.crop_id,
         )
         .filter(
-            CropListing.status == "active"
+            CropListing.status
+            == "active"
         )
     )
 
-    # Crop search
     if crop:
-        crop_value = crop.strip().lower()
+        crop_value = (
+            crop.strip().lower()
+        )
 
         query = query.filter(
-            func.lower(Crop.name).contains(
+            func.lower(
+                Crop.name
+            ).contains(
                 crop_value
             )
         )
 
-    # Location search
     if location:
-        location_value = location.strip().lower()
+        location_value = (
+            location.strip().lower()
+        )
 
         query = query.filter(
             func.lower(
@@ -393,9 +417,10 @@ def get_listings(
             )
         )
 
-    # Quality filter
     if quality:
-        quality_value = quality.strip().lower()
+        quality_value = (
+            quality.strip().lower()
+        )
 
         query = query.filter(
             func.lower(
@@ -404,28 +429,24 @@ def get_listings(
             == quality_value
         )
 
-    # Minimum quantity
     if min_quantity is not None:
         query = query.filter(
             CropListing.quantity_kg
             >= min_quantity
         )
 
-    # Maximum quantity
     if max_quantity is not None:
         query = query.filter(
             CropListing.quantity_kg
             <= max_quantity
         )
 
-    # Minimum price
     if min_price is not None:
         query = query.filter(
             CropListing.expected_price_per_kg
             >= min_price
         )
 
-    # Maximum price
     if max_price is not None:
         query = query.filter(
             CropListing.expected_price_per_kg
@@ -445,13 +466,17 @@ def get_listings(
             listing,
             crop_model,
         )
-        for listing, crop_model in rows
+        for (
+            listing,
+            crop_model,
+        ) in rows
     ]
 
 
 # =========================================================
 # GET SINGLE LISTING
 # =========================================================
+
 
 @router.get(
     "/listings/{listing_id}",
@@ -468,17 +493,21 @@ def get_listing(
         )
         .join(
             Crop,
-            Crop.id == CropListing.crop_id,
+            Crop.id
+            == CropListing.crop_id,
         )
         .filter(
-            CropListing.id == listing_id
+            CropListing.id
+            == listing_id
         )
         .first()
     )
 
     if row is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
             detail="Listing not found",
         )
 
@@ -494,6 +523,7 @@ def get_listing(
 # ADD FAVORITE
 # =========================================================
 
+
 @router.post(
     "/favorites/{listing_id}",
     response_model=FavoriteResponse,
@@ -502,37 +532,47 @@ def get_listing(
 def add_favorite(
     listing_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        get_current_user,
+    ),
 ):
     listing = (
         db.query(CropListing)
         .filter(
-            CropListing.id == listing_id
+            CropListing.id
+            == listing_id
         )
         .first()
     )
 
     if listing is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
             detail="Listing not found",
         )
 
     existing = (
         db.query(Favorite)
         .filter(
-            Favorite.user_id == current_user.id,
-            Favorite.listing_id == listing_id,
+            Favorite.user_id
+            == current_user.id,
+            Favorite.listing_id
+            == listing_id,
         )
         .first()
     )
 
-    # Already favorited
     if existing:
         return FavoriteResponse(
             id=existing.id,
-            listing_id=existing.listing_id,
-            created_at=existing.created_at,
+            listing_id=(
+                existing.listing_id
+            ),
+            created_at=(
+                existing.created_at
+            ),
         )
 
     favorite = Favorite(
@@ -549,14 +589,20 @@ def add_favorite(
         db.rollback()
 
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
             detail="Unable to add favorite",
         ) from exc
 
     return FavoriteResponse(
         id=favorite.id,
-        listing_id=favorite.listing_id,
-        created_at=favorite.created_at,
+        listing_id=(
+            favorite.listing_id
+        ),
+        created_at=(
+            favorite.created_at
+        ),
     )
 
 
@@ -564,13 +610,18 @@ def add_favorite(
 # GET FAVORITES
 # =========================================================
 
+
 @router.get(
     "/favorites",
-    response_model=list[CropListingResponse],
+    response_model=list[
+        CropListingResponse
+    ],
 )
 def get_favorites(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        get_current_user,
+    ),
 ):
     rows = (
         db.query(
@@ -580,14 +631,17 @@ def get_favorites(
         )
         .join(
             CropListing,
-            CropListing.id == Favorite.listing_id,
+            CropListing.id
+            == Favorite.listing_id,
         )
         .join(
             Crop,
-            Crop.id == CropListing.crop_id,
+            Crop.id
+            == CropListing.crop_id,
         )
         .filter(
-            Favorite.user_id == current_user.id
+            Favorite.user_id
+            == current_user.id
         )
         .order_by(
             Favorite.created_at.desc()
@@ -600,13 +654,18 @@ def get_favorites(
             listing,
             crop,
         )
-        for _, listing, crop in rows
+        for (
+            _,
+            listing,
+            crop,
+        ) in rows
     ]
 
 
 # =========================================================
 # REMOVE FAVORITE
 # =========================================================
+
 
 @router.delete(
     "/favorites/{listing_id}",
@@ -615,20 +674,26 @@ def get_favorites(
 def remove_favorite(
     listing_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        get_current_user,
+    ),
 ):
     favorite = (
         db.query(Favorite)
         .filter(
-            Favorite.user_id == current_user.id,
-            Favorite.listing_id == listing_id,
+            Favorite.user_id
+            == current_user.id,
+            Favorite.listing_id
+            == listing_id,
         )
         .first()
     )
 
     if favorite is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
             detail="Favorite not found",
         )
 
@@ -640,12 +705,14 @@ def remove_favorite(
         db.rollback()
 
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
             detail="Unable to remove favorite",
         ) from exc
 
     return MessageResponse(
-        message="Favorite removed"
+        message="Favorite removed",
     )
 
 
@@ -654,6 +721,7 @@ def remove_favorite(
 # FARMER ONLY
 # =========================================================
 
+
 @router.post(
     "/listings/{listing_id}/matches",
     response_model=BuyerMatchResponse,
@@ -661,92 +729,94 @@ def remove_favorite(
 def generate_buyer_matches(
     listing_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_farmer),
+    current_user: User = Depends(
+        require_farmer,
+    ),
 ):
-    row = (
-        db.query(
-            CropListing,
-            Crop,
-        )
-        .join(
-            Crop,
-            Crop.id == CropListing.crop_id,
-        )
-        .filter(
-            CropListing.id == listing_id
-        )
-        .first()
+    listing, crop = get_owned_listing(
+        db,
+        current_user,
+        listing_id,
     )
 
-    if row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Listing not found",
+    buyer_rows = (
+        db.query(
+            Buyer,
+            BuyerProfile,
         )
+        .join(
+            BuyerProfile,
+            Buyer.buyer_profile_id
+            == BuyerProfile.id,
+        )
+        .all()
+    )
 
-    listing, crop = row
-
-    buyers = db.query(Buyer).all()
-
-    matches: list[BuyerMatchItem] = []
+    matches: list[
+        BuyerMatchItem
+    ] = []
 
     try:
-        for buyer in buyers:
-
-            score = calculate_buyer_match(
-                listing_crop=crop.name,
-
-                listing_quantity=(
-                    listing.quantity_kg or 0
-                ),
-
-                listing_price=(
-                    listing.expected_price_per_kg or 0
-                ),
-
-                listing_quality=(
-                    listing.quality_grade or ""
-                ),
-
-                buyer_crop=(
-                    buyer.preferred_crop or ""
-                ),
-
-                buyer_quantity=(
-                    buyer.demand_quantity_kg or 0
-                ),
-
-                buyer_price=(
-                    buyer.offer_price_per_kg or 0
-                ),
-
-                buyer_quality=(
-                    buyer.preferred_quality or ""
-                ),
-
-                distance_km=(
-                    buyer.distance_km
-                    if buyer.distance_km is not None
-                    else 9999
-                ),
-
-                buyer_rating=(
-                    buyer.rating
-                    if buyer.rating is not None
-                    else 0
-                ),
+        for (
+            buyer,
+            buyer_profile,
+        ) in buyer_rows:
+            breakdown = (
+                calculate_buyer_match(
+                    listing_crop=(
+                        crop.name
+                    ),
+                    listing_quantity=(
+                        listing.quantity_kg
+                        or 0
+                    ),
+                    listing_price=(
+                        listing
+                        .expected_price_per_kg
+                        or 0
+                    ),
+                    listing_quality=(
+                        listing.quality_grade
+                        or ""
+                    ),
+                    buyer_crop=(
+                        buyer.preferred_crop
+                        or ""
+                    ),
+                    buyer_quantity=(
+                        buyer.demand_quantity_kg
+                        or 0
+                    ),
+                    buyer_price=(
+                        buyer.offer_price_per_kg
+                        or 0
+                    ),
+                    buyer_quality=(
+                        buyer.preferred_quality
+                        or ""
+                    ),
+                    distance_km=(
+                        buyer.distance_km
+                    ),
+                    buyer_rating=(
+                        buyer.rating
+                    ),
+                )
             )
 
-            # ---------------------------------------------
-            # Check existing buyer match
-            # ---------------------------------------------
+            # Do not recommend buyers who
+            # are looking for another crop.
+            if (
+                breakdown.crop_score
+                <= 0
+            ):
+                continue
 
             existing = (
                 db.query(BuyerMatch)
                 .filter(
                     BuyerMatch.listing_id
                     == listing.id,
-
                     BuyerMatch.buyer_id
                     == buyer.id,
                 )
@@ -754,50 +824,80 @@ def generate_buyer_matches(
             )
 
             if existing:
-                existing.match_score = score
-                existing.status = "suggested"
+                existing.match_score = (
+                    breakdown.total_score
+                )
+
+                existing.status = (
+                    "suggested"
+                )
 
             else:
                 existing = BuyerMatch(
-                    listing_id=listing.id,
-                    buyer_id=buyer.id,
-                    match_score=score,
+                    listing_id=(
+                        listing.id
+                    ),
+                    buyer_id=(
+                        buyer.id
+                    ),
+                    match_score=(
+                        breakdown.total_score
+                    ),
                     status="suggested",
                 )
 
                 db.add(existing)
 
-            # ---------------------------------------------
-            # Buyer name
-            # ---------------------------------------------
-
-            buyer_name = "Buyer"
-
-            buyer_profile = getattr(
-                buyer,
-                "buyer_profile",
-                None,
+            buyer_name = (
+                buyer_profile.business_name
+                or "Buyer"
             )
 
-            if buyer_profile:
-                business_name = getattr(
-                    buyer_profile,
-                    "business_name",
-                    None,
+            buyer_city = (
+                buyer.city
+                or buyer_profile.city
+            )
+
+            verification = (
+                verification_snapshot_for_profile(
+                    db=db,
+                    buyer_profile_id=(
+                        buyer_profile.id
+                    ),
                 )
-
-                if business_name:
-                    buyer_name = business_name
-
-            # ---------------------------------------------
-            # Response item
-            # ---------------------------------------------
+            )
 
             matches.append(
                 BuyerMatchItem(
                     buyer_id=buyer.id,
-                    buyer_name=buyer_name,
-                    match_percentage=score,
+
+                    buyer_name=(
+                        buyer_name
+                    ),
+
+                    buyer_city=(
+                        buyer_city
+                    ),
+
+                    buyer_state=(
+                        buyer.state
+                    ),
+
+                    preferred_crop=(
+                        buyer.preferred_crop
+                    ),
+
+                    preferred_quality=(
+                        buyer.preferred_quality
+                    ),
+
+                    match_percentage=(
+                        breakdown.total_score
+                    ),
+
+                    match_label=(
+                        breakdown.label
+                    ),
 
                     offer_price=(
                         buyer.offer_price_per_kg
@@ -814,22 +914,76 @@ def generate_buyer_matches(
                     buyer_rating=(
                         buyer.rating
                     ),
+
+                    verification_status=(
+                        verification["status"]
+                    ),
+
+                    verification_label=(
+                        verification[
+                            "status_label"
+                        ]
+                    ),
+
+                    verification_note=(
+                        verification[
+                            "verification_note"
+                        ]
+                    ),
+
+                    agriva_verified=(
+                        verification["status"]
+                        == "AGRIVA_VERIFIED"
+                    ),
+
+                    breakdown=(
+                        BuyerMatchBreakdownResponse(
+                            crop_score=(
+                                breakdown.crop_score
+                            ),
+                            quantity_score=(
+                                breakdown.quantity_score
+                            ),
+                            price_score=(
+                                breakdown.price_score
+                            ),
+                            quality_score=(
+                                breakdown.quality_score
+                            ),
+                            distance_score=(
+                                breakdown.distance_score
+                            ),
+                            rating_score=(
+                                breakdown.rating_score
+                            ),
+                        )
+                    ),
                 )
             )
 
         db.commit()
 
+    except HTTPException:
+        db.rollback()
+        raise
+
     except Exception as exc:
         db.rollback()
 
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unable to generate buyer matches",
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail=(
+                "Unable to generate "
+                "buyer matches"
+            ),
         ) from exc
 
-    # Highest match first
     matches.sort(
-        key=lambda item: item.match_percentage,
+        key=lambda item: (
+            item.match_percentage
+        ),
         reverse=True,
     )
 
@@ -837,3 +991,110 @@ def generate_buyer_matches(
         listing_id=listing.id,
         matches=matches,
     )
+
+
+# =========================================================
+# DEMO MARKET PRICE VALIDATION
+# =========================================================
+
+
+DEMO_PRICE_RANGES_PER_KG = {
+    "WHEAT": (
+        24.0,
+        32.0,
+    ),
+    "MAIZE": (
+        24.0,
+        27.0,
+    ),
+    "RICE": (
+        28.0,
+        40.0,
+    ),
+    "POTATO": (
+        15.0,
+        35.0,
+    ),
+}
+
+
+def normalize_market_crop_name(
+    crop_name: str,
+) -> str:
+    normalized = (
+        crop_name
+        .strip()
+        .upper()
+    )
+
+    if (
+        "MAIZE" in normalized
+        or "CORN" in normalized
+    ):
+        return "MAIZE"
+
+    if "WHEAT" in normalized:
+        return "WHEAT"
+
+    if (
+        "RICE" in normalized
+        or "PADDY" in normalized
+    ):
+        return "RICE"
+
+    if "POTATO" in normalized:
+        return "POTATO"
+
+    return normalized
+
+
+def validate_market_price(
+    crop_name: str,
+    price_per_kg: float,
+) -> float:
+    crop_key = (
+        normalize_market_crop_name(
+            crop_name,
+        )
+    )
+
+    price = round(
+        float(price_per_kg),
+        2,
+    )
+
+    price_range = (
+        DEMO_PRICE_RANGES_PER_KG
+        .get(crop_key)
+    )
+
+    if price_range is None:
+        return price
+
+    (
+        minimum_price,
+        maximum_price,
+    ) = price_range
+
+    if not (
+        minimum_price
+        <= price
+        <= maximum_price
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=(
+                "Invalid demo market price "
+                f"for {crop_name}. "
+                "Expected price must be "
+                f"between INR "
+                f"{minimum_price:.2f} "
+                f"and INR "
+                f"{maximum_price:.2f} "
+                "per kg."
+            ),
+        )
+
+    return price

@@ -1,7 +1,10 @@
 "use client";
 
+import ReactMarkdown from "react-markdown";
+
 import {
   Bot,
+  Languages,
   Loader2,
   MessageCircle,
   Send,
@@ -17,6 +20,11 @@ import {
 
 import { useRouter } from "next/navigation";
 
+import {
+  useLocale,
+  useTranslations,
+} from "next-intl";
+
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://127.0.0.1:8000";
@@ -26,23 +34,41 @@ type Message = {
   text: string;
 };
 
+type AILanguage = "en" | "hi";
+
 type AIResponse = {
   answer: string;
   source: string;
   context_used: string[];
 };
 
-const SUGGESTIONS = [
-  "What crop should I grow?",
-  "Which seed is best?",
-  "Why are my leaves yellow?",
-  "When should I irrigate?",
-  "Should I sell now?",
-  "Which buyer is best?",
-];
+function getToken() {
+  return (
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("token")
+  );
+}
+
+function clearAuthStorage() {
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+}
 
 export default function AgrivaAI() {
+  const t = useTranslations("ai");
+  const locale = useLocale();
   const router = useRouter();
+
+  const suggestions = [
+    t("suggestionCrop"),
+    t("suggestionSeed"),
+    t("suggestionYellowLeaves"),
+    t("suggestionIrrigation"),
+    t("suggestionSell"),
+    t("suggestionBuyer"),
+  ];
 
   const [open, setOpen] =
     useState(false);
@@ -53,47 +79,62 @@ export default function AgrivaAI() {
   const [loading, setLoading] =
     useState(false);
 
+  const [aiLanguage, setAiLanguage] =
+    useState<AILanguage>(
+      locale === "hi" ? "hi" : "en"
+    );
+
   const [messages, setMessages] =
     useState<Message[]>([
       {
         role: "assistant",
-        text:
-          "Namaste! I am AGRIVA AI. " +
-          "Ask me about crops, soil, weather, " +
-          "irrigation, market prices or buyers.",
+        text: t("greeting"),
       },
     ]);
 
   const messagesEndRef =
-    useRef<HTMLDivElement | null>(null);
+    useRef<HTMLDivElement | null>(
+      null
+    );
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
+    messagesEndRef.current?.scrollIntoView(
+      {
+        behavior: "smooth",
+      }
+    );
   }, [messages, loading]);
 
   async function askAI(
     customQuestion?: string
   ) {
     const value = (
-      customQuestion ||
-      question
+      customQuestion || question
     ).trim();
 
     if (!value || loading) {
       return;
     }
 
-    const token =
-      localStorage.getItem(
-        "access_token"
-      );
+    const token = getToken();
 
     if (!token) {
       router.replace("/login");
       return;
     }
+
+    /*
+     * Exclude the initial greeting.
+     * Send only recent conversation
+     * history to Gemini.
+     */
+    const history = messages
+      .slice(1)
+      .slice(-10)
+      .map((message) => ({
+        role: message.role,
+        content: message.text,
+      }));
 
     setMessages((current) => [
       ...current,
@@ -122,6 +163,13 @@ export default function AgrivaAI() {
 
           body: JSON.stringify({
             question: value,
+            history,
+
+            /*
+             * en = English response
+             * hi = Hindi response
+             */
+            language: aiLanguage,
           }),
         }
       );
@@ -131,18 +179,11 @@ export default function AgrivaAI() {
         .catch(() => null);
 
       if (!response.ok) {
-        if (
-          response.status === 401
-        ) {
-          localStorage.removeItem(
-            "access_token"
-          );
-
-          localStorage.removeItem(
-            "refresh_token"
-          );
+        if (response.status === 401) {
+          clearAuthStorage();
 
           router.replace("/login");
+
           return;
         }
 
@@ -159,16 +200,33 @@ export default function AgrivaAI() {
         ...current,
         {
           role: "assistant",
+
           text:
             result.answer ||
             "AGRIVA AI did not return an answer.",
         },
       ]);
+
+      console.log(
+        "AGRIVA AI SOURCE:",
+        result.source
+      );
+
+      console.log(
+        "AGRIVA AI CONTEXT:",
+        result.context_used
+      );
+
+      console.log(
+        "AGRIVA AI LANGUAGE:",
+        aiLanguage
+      );
     } catch (err) {
       setMessages((current) => [
         ...current,
         {
           role: "assistant",
+
           text:
             err instanceof Error
               ? err.message
@@ -190,8 +248,7 @@ export default function AgrivaAI() {
 
   return (
     <>
-      {/* FLOATING BUTTON */}
-
+      {/* FLOATING AI BUTTON */}
       {!open && (
         <button
           id="agriva-ai-launcher"
@@ -199,20 +256,18 @@ export default function AgrivaAI() {
           onClick={() =>
             setOpen(true)
           }
-          className="fixed bottom-6 right-6 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-700 text-white shadow-xl transition hover:scale-105 hover:bg-emerald-800"
-          aria-label="Open AGRIVA AI"
-          title="Open AGRIVA AI"
+          className="fixed bottom-24 right-4 z-50 flex h-16 w-16 lg:bottom-6 lg:right-6 items-center justify-center rounded-full bg-emerald-700 text-white shadow-xl transition hover:scale-105 hover:bg-emerald-800"
+          aria-label={t("openAI")}
+          title={t("openAI")}
         >
           <MessageCircle className="h-7 w-7" />
         </button>
       )}
 
-      {/* ASSISTANT PANEL */}
-
+      {/* AGRIVA AI PANEL */}
       {open && (
-        <div className="fixed bottom-6 right-6 z-50 flex h-[620px] w-[calc(100vw-2rem)] max-w-md flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+        <div className="fixed bottom-24 right-4 z-50 flex h-[calc(100dvh-7rem)] w-[calc(100vw-2rem)] max-w-md lg:bottom-6 lg:right-6 lg:h-[620px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
           {/* HEADER */}
-
           <div className="flex items-center justify-between bg-emerald-700 px-5 py-4 text-white">
             <div className="flex items-center gap-3">
               <div className="rounded-xl bg-white/15 p-2">
@@ -225,7 +280,9 @@ export default function AgrivaAI() {
                 </p>
 
                 <p className="text-xs text-emerald-100">
-                  Farmer Assistant
+                  {t(
+                    "farmerAssistant"
+                  )}
                 </p>
               </div>
             </div>
@@ -236,17 +293,61 @@ export default function AgrivaAI() {
                 setOpen(false)
               }
               className="rounded-lg p-2 hover:bg-white/10"
-              aria-label="Close AGRIVA AI"
+              aria-label={t(
+                "closeAI"
+              )}
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          {/* SUGGESTIONS */}
+          {/* LANGUAGE SELECTOR */}
+          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+              <Languages className="h-4 w-4" />
 
+              <span>
+                Response Language
+              </span>
+            </div>
+
+            <div className="flex rounded-xl bg-slate-100 p-1">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() =>
+                  setAiLanguage("en")
+                }
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  aiLanguage === "en"
+                    ? "bg-emerald-700 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                } disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                English
+              </button>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() =>
+                  setAiLanguage("hi")
+                }
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  aiLanguage === "hi"
+                    ? "bg-emerald-700 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
+                } disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                हिंदी
+              </button>
+            </div>
+          </div>
+
+          {/* SUGGESTED QUESTIONS */}
           <div className="border-b border-slate-100 bg-slate-50 p-3">
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {SUGGESTIONS.map(
+              {suggestions.map(
                 (suggestion) => (
                   <button
                     key={suggestion}
@@ -266,8 +367,7 @@ export default function AgrivaAI() {
             </div>
           </div>
 
-          {/* CHAT */}
-
+          {/* CHAT AREA */}
           <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50 p-4">
             {messages.map(
               (
@@ -287,33 +387,49 @@ export default function AgrivaAI() {
                     className={
                       message.role ===
                       "user"
-                        ? "max-w-[82%] rounded-2xl rounded-br-md bg-emerald-700 px-4 py-3 text-sm leading-6 text-white"
-                        : "max-w-[82%] rounded-2xl rounded-bl-md bg-white px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm"
+                        ? "max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-emerald-700 px-4 py-3 text-sm leading-6 text-white"
+                        : "prose prose-sm max-w-[88%] rounded-2xl rounded-bl-md bg-white px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm"
                     }
                   >
-                    {message.text}
+                    {message.role ===
+                    "assistant" ? (
+                      <ReactMarkdown>
+                        {
+                          message.text
+                        }
+                      </ReactMarkdown>
+                    ) : (
+                      message.text
+                    )}
                   </div>
                 </div>
               )
             )}
 
+            {/* THINKING */}
             {loading && (
               <div className="flex justify-start">
-                <div className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
+                <div className="flex items-center gap-2 rounded-2xl rounded-bl-md bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
                   <Loader2 className="h-4 w-4 animate-spin" />
 
-                  AGRIVA AI is thinking...
+                  {aiLanguage ===
+                  "hi"
+                    ? "AGRIVA AI सोच रहा है..."
+                    : t(
+                        "thinking"
+                      )}
                 </div>
               </div>
             )}
 
             <div
-              ref={messagesEndRef}
+              ref={
+                messagesEndRef
+              }
             />
           </div>
 
           {/* INPUT */}
-
           <form
             onSubmit={submit}
             className="flex gap-2 border-t border-slate-200 bg-white p-4"
@@ -325,7 +441,13 @@ export default function AgrivaAI() {
                   event.target.value
                 )
               }
-              placeholder="Ask AGRIVA AI..."
+              placeholder={
+                aiLanguage === "hi"
+                  ? "AGRIVA AI से पूछें..."
+                  : t(
+                      "askPlaceholder"
+                    )
+              }
               disabled={loading}
               className="min-w-0 flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 disabled:bg-slate-100"
             />
@@ -337,7 +459,9 @@ export default function AgrivaAI() {
                 !question.trim()
               }
               className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Send message"
+              aria-label={t(
+                "sendMessage"
+              )}
             >
               {loading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />

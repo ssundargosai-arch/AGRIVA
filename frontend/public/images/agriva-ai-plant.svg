@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 650">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0" stop-color="#0d7467"/>
+      <stop offset=".55" stop-color="#07534c"/>
+      <stop offset="1" stop-color="#052e2b"/>
+    </radialGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#67e8f9" stop-opacity=".9"/>
+      <stop offset=".45" stop-color="#2dd4bf" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#2dd4bf" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="14"/></filter>
+  </defs>
+
+  <rect width="900" height="650" rx="42" fill="url(#bg)"/>
+  <circle cx="450" cy="360" r="230" fill="url(#glow)"/>
+  <g stroke="#5eead4" stroke-opacity=".32" fill="none">
+    <circle cx="450" cy="360" r="180"/>
+    <circle cx="450" cy="360" r="235"/>
+    <circle cx="450" cy="360" r="290"/>
+    <path d="M150 280 H310 M590 280 H750 M170 455 H335 M565 455 H730"/>
+    <path d="M225 160 L340 260 M675 160 L560 260 M220 545 L350 455 M680 545 L550 455"/>
+  </g>
+
+  <g fill="#99f6e4">
+    <circle cx="150" cy="280" r="8"/>
+    <circle cx="750" cy="280" r="8"/>
+    <circle cx="170" cy="455" r="8"/>
+    <circle cx="730" cy="455" r="8"/>
+    <circle cx="225" cy="160" r="8"/>
+    <circle cx="675" cy="160" r="8"/>
+  </g>
+
+  <!-- holographic base -->
+  <ellipse cx="450" cy="515" rx="190" ry="46" fill="#0f766e" opacity=".7"/>
+  <ellipse cx="450" cy="503" rx="150" ry="30" fill="#2dd4bf" opacity=".38"/>
+  <ellipse cx="450" cy="493" rx="110" ry="18" fill="#67e8f9" opacity=".45"/>
+
+  <!-- plant -->
+  <path d="M448 490 C450 420 452 340 452 245" stroke="#b7f7c5" stroke-width="13" stroke-linecap="round"/>
+  <g fill="#4ade80" stroke="#bbf7d0" stroke-width="4">
+    <path d="M452 330 C380 320 340 275 350 225 C410 232 450 270 452 330Z"/>
+    <path d="M455 295 C515 292 560 250 565 202 C505 205 465 238 455 295Z"/>
+    <path d="M451 395 C395 393 360 363 362 325 C410 327 443 350 451 395Z"/>
+    <path d="M455 375 C505 374 540 344 542 307 C495 310 466 334 455 375Z"/>
+  </g>
+
+  <g fill="#d1fae5">
+    <circle cx="450" cy="245" r="10"/>
+    <circle cx="410" cy="285" r="7"/>
+    <circle cx="505" cy="255" r="7"/>
+  </g>
+
+  <text x="450" y="90" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#ecfdf5">AGRIVA AI</text>
+  <text x="450" y="128" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#99f6e4">Smart Farming Intelligence</text>
+</svg>

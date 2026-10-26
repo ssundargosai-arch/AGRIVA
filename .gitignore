@@ -39,3 +39,18 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+!.env.sample
+__pycache__/
+*.py[cod]
+.venv/
+venv/

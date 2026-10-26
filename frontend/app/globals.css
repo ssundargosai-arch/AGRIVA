@@ -1,21 +1,2398 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --agriva-page: #f4f7f2;
+  --agriva-page-soft: #eef6ec;
+  --agriva-surface: #ffffff;
+  --agriva-surface-2: #f8fafc;
+  --agriva-surface-3: #f0fdf4;
+
+  --agriva-text: #0f172a;
+  --agriva-text-soft: #334155;
+  --agriva-text-muted: #64748b;
+
+  --agriva-border: #dbe7dc;
+  --agriva-border-strong: #c6dbc8;
+
+  --agriva-primary: #0f7a4a;
+  --agriva-primary-hover: #0b5d39;
+
+  --agriva-shadow:
+    0 12px 34px
+    rgba(15, 23, 42, 0.08);
+}
+
+html[data-theme="dark"] {
+  --agriva-page: #020617;
+  --agriva-page-soft: #07111f;
+  --agriva-surface: #0f172a;
+  --agriva-surface-2: #111827;
+  --agriva-surface-3:
+    rgba(6, 78, 59, 0.28);
+
+  --agriva-text: #f8fafc;
+  --agriva-text-soft: #cbd5e1;
+  --agriva-text-muted: #94a3b8;
+
+  --agriva-border:
+    rgba(148, 163, 184, 0.18);
+  --agriva-border-strong:
+    rgba(52, 211, 153, 0.22);
+
+  --agriva-primary: #10b981;
+  --agriva-primary-hover: #34d399;
+
+  --agriva-shadow:
+    0 16px 45px
+    rgba(0, 0, 0, 0.28);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+  background:
+    var(--agriva-page);
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
+  min-height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background:
+    var(--agriva-page);
+  color:
+    var(--agriva-text);
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
 }
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+/* =========================================================
+   GLOBAL AGRIVA THEME BUTTON
+========================================================= */
+
+.agriva-global-theme-toggle {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 120;
+
+  display: inline-flex;
+  min-width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+
+  border: 1px solid
+    var(--agriva-border-strong);
+  border-radius: 9999px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--agriva-surface) 88%,
+      transparent
+    );
+
+  color:
+    var(--agriva-text);
+
+  padding:
+    0 0.9rem;
+
+  box-shadow:
+    var(--agriva-shadow);
+
+  backdrop-filter:
+    blur(16px);
+
+  cursor: pointer;
+
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.agriva-global-theme-toggle:hover {
+  transform:
+    translateY(-2px);
+  border-color:
+    #34d399;
+}
+
+.agriva-global-theme-toggle:focus-visible {
+  outline:
+    3px solid
+    rgba(16, 185, 129, 0.28);
+  outline-offset:
+    3px;
+}
+
+.agriva-theme-toggle-label {
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .agriva-global-theme-toggle {
+    width: 3rem;
+    min-width: 3rem;
+    padding: 0;
+  }
+
+  .agriva-theme-toggle-label {
+    display: none;
+  }
+}
+
+/*
+ * Old dashboard-only theme buttons are hidden.
+ * The single global control above is now authoritative.
+ */
+button[aria-label="Switch to dark mode"],
+button[aria-label="Switch to light mode"] {
+  display: none !important;
+}
+
+/* =========================================================
+   DARK MODE — EXISTING LIGHT AGRIVA PAGES
+========================================================= */
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] main,
+html[data-theme="dark"] .agriva-dashboard {
+  color:
+    var(--agriva-text);
+}
+
+html[data-theme="dark"] .agriva-dashboard.agriva-light,
+html[data-theme="dark"] .agriva-dashboard.agriva-dark {
+  background-color:
+    var(--agriva-page) !important;
+  color:
+    var(--agriva-text) !important;
+  color-scheme:
+    dark !important;
+}
+
+html[data-theme="dark"] .bg-white {
+  background-color:
+    var(--agriva-surface) !important;
+}
+
+html[data-theme="dark"] .bg-slate-50 {
+  background-color:
+    var(--agriva-page-soft) !important;
+}
+
+html[data-theme="dark"] .bg-slate-100 {
+  background-color:
+    #172033 !important;
+}
+
+html[data-theme="dark"] .bg-slate-200 {
+  background-color:
+    #1e293b !important;
+}
+
+html[data-theme="dark"] .bg-green-50,
+html[data-theme="dark"] .bg-emerald-50 {
+  background-color:
+    rgba(6, 78, 59, 0.32)
+    !important;
+}
+
+html[data-theme="dark"] .bg-emerald-100,
+html[data-theme="dark"] .bg-green-100 {
+  background-color:
+    rgba(16, 185, 129, 0.18)
+    !important;
+}
+
+html[data-theme="dark"] .bg-blue-50 {
+  background-color:
+    rgba(30, 64, 175, 0.22)
+    !important;
+}
+
+html[data-theme="dark"] .bg-amber-50 {
+  background-color:
+    rgba(146, 64, 14, 0.22)
+    !important;
+}
+
+html[data-theme="dark"] .bg-red-50 {
+  background-color:
+    rgba(127, 29, 29, 0.24)
+    !important;
+}
+
+html[data-theme="dark"] .text-slate-950,
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-slate-800 {
+  color:
+    #f8fafc !important;
+}
+
+html[data-theme="dark"] .text-slate-700 {
+  color:
+    #e2e8f0 !important;
+}
+
+html[data-theme="dark"] .text-slate-600 {
+  color:
+    #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .text-slate-500 {
+  color:
+    #94a3b8 !important;
+}
+
+html[data-theme="dark"] .text-slate-400 {
+  color:
+    #94a3b8 !important;
+}
+
+html[data-theme="dark"] .text-green-700,
+html[data-theme="dark"] .text-emerald-700 {
+  color:
+    #34d399 !important;
+}
+
+html[data-theme="dark"] .border-slate-100,
+html[data-theme="dark"] .border-slate-200,
+html[data-theme="dark"] .border-slate-300,
+html[data-theme="dark"] .border-emerald-100,
+html[data-theme="dark"] .border-green-100 {
+  border-color:
+    var(--agriva-border)
+    !important;
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  background-color:
+    #0f172a;
+  color:
+    #f8fafc;
+  border-color:
+    rgba(148, 163, 184, 0.30);
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color:
+    #64748b;
+}
+
+html[data-theme="dark"] option {
+  background-color:
+    #0f172a;
+  color:
+    #f8fafc;
+}
+
+html[data-theme="dark"] table {
+  color:
+    #e2e8f0;
+}
+
+html[data-theme="dark"] .shadow-sm,
+html[data-theme="dark"] .shadow-md,
+html[data-theme="dark"] .shadow-lg,
+html[data-theme="dark"] .shadow-xl {
+  box-shadow:
+    var(--agriva-shadow)
+    !important;
+}
+
+/* =========================================================
+   LIGHT MODE — PRICE / MARKETPLACE DARK INTELLIGENCE PAGES
+========================================================= */
+
+html[data-theme="light"] body {
+  background-color:
+    var(--agriva-page);
+  color:
+    var(--agriva-text);
+}
+
+html[data-theme="light"] .agriva-dashboard.agriva-dark,
+html[data-theme="light"] .agriva-dashboard.agriva-light {
+  background-color:
+    var(--agriva-page) !important;
+  color:
+    var(--agriva-text) !important;
+  color-scheme:
+    light !important;
+}
+
+html[data-theme="light"] .bg-slate-950 {
+  background-color:
+    #f4f8f3 !important;
+}
+
+html[data-theme="light"] .bg-slate-900 {
+  background-color:
+    #eef6ec !important;
+}
+
+html[data-theme="light"] .bg-slate-800 {
+  background-color:
+    #e8f2e7 !important;
+}
+
+html[data-theme="light"] .from-slate-950 {
+  --tw-gradient-from:
+    #f8fafc !important;
+}
+
+html[data-theme="light"] .via-emerald-950 {
+  --tw-gradient-via:
+    #ecfdf5 !important;
+}
+
+html[data-theme="light"] .to-slate-950 {
+  --tw-gradient-to:
+    #f0fdf4 !important;
+}
+
+html[data-theme="light"] .bg-slate-950 .text-white,
+html[data-theme="light"] .from-slate-950 .text-white {
+  color:
+    #0f172a !important;
+}
+
+html[data-theme="light"] .bg-slate-950 .text-slate-300,
+html[data-theme="light"] .from-slate-950 .text-slate-300 {
+  color:
+    #475569 !important;
+}
+
+html[data-theme="light"] .bg-slate-950 .text-slate-400,
+html[data-theme="light"] .from-slate-950 .text-slate-400 {
+  color:
+    #64748b !important;
+}
+
+html[data-theme="light"] .bg-slate-950 .text-emerald-300,
+html[data-theme="light"] .from-slate-950 .text-emerald-300 {
+  color:
+    #047857 !important;
+}
+
+html[data-theme="light"] [class~="border-white/10"],
+html[data-theme="light"] [class~="border-white/20"] {
+  border-color:
+    rgba(15, 118, 110, 0.18)
+    !important;
+}
+
+html[data-theme="light"] [class~="bg-white/5"],
+html[data-theme="light"] [class~="bg-white/10"] {
+  background-color:
+    rgba(255, 255, 255, 0.72)
+    !important;
+}
+
+/*
+ * Keep actual primary/action buttons readable
+ * even when they sit inside a light-converted hero.
+ */
+html[data-theme="light"] button.bg-emerald-600.text-white,
+html[data-theme="light"] button.bg-emerald-700.text-white,
+html[data-theme="light"] button.bg-green-600.text-white,
+html[data-theme="light"] button.bg-green-700.text-white,
+html[data-theme="light"] a.bg-emerald-600.text-white,
+html[data-theme="light"] a.bg-emerald-700.text-white,
+html[data-theme="light"] a.bg-green-600.text-white,
+html[data-theme="light"] a.bg-green-700.text-white {
+  color:
+    #ffffff !important;
+}
+
+/* =========================================================
+   COMMON THEMED SURFACES
+========================================================= */
+
+html[data-theme="dark"] header,
+html[data-theme="dark"] footer,
+html[data-theme="dark"] nav {
+  border-color:
+    var(--agriva-border);
+}
+
+html[data-theme="dark"] ::selection {
+  background:
+    rgba(16, 185, 129, 0.38);
+  color:
+    white;
+}
+
+html[data-theme="light"] ::selection {
+  background:
+    rgba(16, 185, 129, 0.24);
+  color:
+    #052e16;
+}
+
+@media print {
+  .agriva-global-theme-toggle {
+    display:
+      none !important;
+  }
+}
+
+/* =========================================================
+   PHASE 1 — FARMER-FRIENDLY GLOBAL UI FOUNDATION
+========================================================= */
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+body {
+  font-family:
+    Inter,
+    "Noto Sans Devanagari",
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+}
+
+p,
+span,
+button,
+a,
+label,
+input,
+select,
+textarea {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+button,
+a,
+select,
+input,
+textarea {
+  touch-action: manipulation;
+}
+
+.agriva-language-switcher {
+  max-width: 100%;
+}
+
+.agriva-language-switcher select {
+  min-height: 2rem;
+  max-width: 11rem;
+}
+
+.agriva-farmer-header {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.farmer-bottom-nav button,
+.farmer-bottom-nav a {
+  min-height: 64px;
+}
+
+@media (max-width: 767px) {
+  body:has(.farmer-bottom-nav) .agriva-global-theme-toggle {
+    bottom: 6.35rem;
+    left: 0.75rem;
+    z-index: 55;
+  }
+
+  body:has(.farmer-bottom-nav) .agriva-theme-toggle-label {
+    display: none;
+  }
+}
+
+@media (max-width: 430px) {
+  .agriva-language-switcher {
+    flex: 1 1 auto;
+  }
+
+  .agriva-language-switcher select {
+    width: 100%;
+    max-width: 9rem;
+    font-size: 0.95rem;
+  }
+}
+
+
+/* =========================================================
+   PHASE 2 — FARMER COLOR CONTRAST POLISH
+========================================================= */
+
+html[data-theme="light"] .farmer-bottom-nav {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: #d7e3da;
+}
+
+html[data-theme="light"] .farmer-bottom-nav button,
+html[data-theme="light"] .farmer-bottom-nav a {
+  color: #475569;
+}
+
+html[data-theme="light"] .farmer-bottom-nav button:focus-visible,
+html[data-theme="light"] .farmer-bottom-nav a:focus-visible {
+  outline: 3px solid rgba(15, 122, 74, 0.22);
+  outline-offset: -3px;
+}
+
+html[data-theme="light"] .agriva-global-theme-toggle {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: #b8d6c3;
+  color: #1e293b;
+}
+
+@media (max-width: 767px) {
+  body:has(.farmer-bottom-nav) {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  body:has(.farmer-bottom-nav) .agriva-global-theme-toggle {
+    bottom: 6.35rem;
+  }
+}
+
+/* =========================================================
+   PHASE 2 — FINAL MOBILE CLEANUP
+========================================================= */
+@media (max-width: 767px) {
+  body:has(.farmer-bottom-nav) .agriva-global-theme-toggle {
+    left: 0.75rem !important;
+    bottom: 7rem !important;
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    height: 2.75rem !important;
+    padding: 0 !important;
+    z-index: 55 !important;
+  }
+
+  body:has(.farmer-bottom-nav) .agriva-theme-toggle-label {
+    display: none !important;
+  }
+}
+
+
+/* =========================================================
+   AGRIVA PHASE 4 SOIL THEME CLEANUP
+   Hide the global floating theme toggle only on Soil page.
+   Soil has its own compact header theme control.
+========================================================= */
+body:has(.agriva-soil-page) .agriva-global-theme-toggle {
+  display: none !important;
+}
+
+
+/* AGRIVA_GLOBAL_THEME_V2 */
+
+/* =========================================================
+   AGRIVA GLOBAL THEME TOKENS
+   ========================================================= */
+
+:root {
+  --agriva-bg: #f6fbf7;
+  --agriva-surface: #ffffff;
+  --agriva-surface-soft: #eef8f1;
+  --agriva-surface-strong: #e0f1e6;
+
+  --agriva-text: #0f172a;
+  --agriva-text-muted: #475569;
+  --agriva-text-soft: #64748b;
+
+  --agriva-border: #d7e5dc;
+  --agriva-border-strong: #b8d5c4;
+
+  --agriva-primary: #059669;
+  --agriva-primary-hover: #047857;
+  --agriva-primary-text: #ffffff;
+
+  --agriva-shadow:
+    0 14px 36px rgba(15, 23, 42, 0.09);
+}
+
+html.dark,
+html[data-theme="dark"] {
+  --agriva-bg: #07140f;
+  --agriva-surface: #0d1d16;
+  --agriva-surface-soft: #12271e;
+  --agriva-surface-strong: #173126;
+
+  --agriva-text: #f8fafc;
+  --agriva-text-muted: #cbd5e1;
+  --agriva-text-soft: #94a3b8;
+
+  --agriva-border: #294338;
+  --agriva-border-strong: #38604d;
+
+  --agriva-primary: #22c55e;
+  --agriva-primary-hover: #16a34a;
+  --agriva-primary-text: #04120a;
+
+  --agriva-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.32);
+}
+
+
+/* =========================================================
+   DOCUMENT BASE
+   ========================================================= */
+
+html,
+body {
+  background-color: var(--agriva-bg);
+  color: var(--agriva-text);
+}
+
+body {
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+
+/* =========================================================
+   AGRIVA SEMANTIC HELPERS
+   Use these in new components.
+   ========================================================= */
+
+.agriva-page {
+  background: var(--agriva-bg);
+  color: var(--agriva-text);
+}
+
+.agriva-surface {
+  background: var(--agriva-surface);
+  color: var(--agriva-text);
+  border-color: var(--agriva-border);
+}
+
+.agriva-surface-soft {
+  background: var(--agriva-surface-soft);
+  color: var(--agriva-text);
+  border-color: var(--agriva-border);
+}
+
+.agriva-text {
+  color: var(--agriva-text);
+}
+
+.agriva-muted {
+  color: var(--agriva-text-muted);
+}
+
+.agriva-soft {
+  color: var(--agriva-text-soft);
+}
+
+.agriva-border {
+  border-color: var(--agriva-border);
+}
+
+.agriva-shadow {
+  box-shadow: var(--agriva-shadow);
+}
+
+
+/* =========================================================
+   LIGHT MODE CONTRAST SAFETY
+   ========================================================= */
+
+html:not(.dark)[data-theme="light"] body,
+html:not(.dark) body {
+  background-color: var(--agriva-bg);
+  color: var(--agriva-text);
+}
+
+
+/* Dark text utilities that are already safe */
+html:not(.dark) .text-slate-950 {
+  color: #020617;
+}
+
+html:not(.dark) .text-slate-900 {
+  color: #0f172a;
+}
+
+html:not(.dark) .text-slate-800 {
+  color: #1e293b;
+}
+
+html:not(.dark) .text-slate-700 {
+  color: #334155;
+}
+
+
+/* Very pale text becomes readable in light mode */
+html:not(.dark) .text-slate-300 {
+  color: #475569;
+}
+
+html:not(.dark) .text-slate-400 {
+  color: #64748b;
+}
+
+html:not(.dark) .text-slate-500 {
+  color: #475569;
+}
+
+
+/* Cards hardcoded dark should not stay dark in LIGHT mode.
+   Buttons and links are intentionally excluded. */
+
+html:not(.dark)
+  :where(div, section, article, aside)
+  .bg-slate-950,
+html:not(.dark)
+  :where(div, section, article, aside).bg-slate-950 {
+  background-color: #ffffff;
+}
+
+html:not(.dark)
+  :where(div, section, article, aside)
+  .bg-slate-900,
+html:not(.dark)
+  :where(div, section, article, aside).bg-slate-900 {
+  background-color: #ffffff;
+}
+
+
+/* Explicit dark cards */
+html:not(.dark)
+  :where(div, section, article, aside)[class*="bg-[#0"] {
+  color: #0f172a;
+}
+
+
+/* White headings on light sections */
+html:not(.dark)
+  main
+  :where(h1, h2, h3, h4)
+  .text-white {
+  color: #0f172a;
+}
+
+html:not(.dark)
+  main
+  :where(h1, h2, h3, h4).text-white {
+  color: #0f172a;
+}
+
+
+/* Text inside converted dark cards */
+html:not(.dark)
+  :where(div, section, article, aside).bg-slate-950
+  :where(.text-white, .text-slate-100, .text-slate-200) {
+  color: #0f172a;
+}
+
+html:not(.dark)
+  :where(div, section, article, aside).bg-slate-950
+  :where(.text-slate-300, .text-slate-400, .text-slate-500) {
+  color: #475569;
+}
+
+html:not(.dark)
+  :where(div, section, article, aside).bg-slate-900
+  :where(.text-white, .text-slate-100, .text-slate-200) {
+  color: #0f172a;
+}
+
+html:not(.dark)
+  :where(div, section, article, aside).bg-slate-900
+  :where(.text-slate-300, .text-slate-400, .text-slate-500) {
+  color: #475569;
+}
+
+
+/* Keep real action buttons readable */
+html:not(.dark)
+  :where(button, a).bg-emerald-600,
+html:not(.dark)
+  :where(button, a).bg-emerald-700,
+html:not(.dark)
+  :where(button, a).bg-green-600,
+html:not(.dark)
+  :where(button, a).bg-green-700 {
+  color: #ffffff;
+}
+
+
+/* =========================================================
+   DARK MODE CONTRAST SAFETY
+   ========================================================= */
+
+html.dark .text-slate-950,
+html[data-theme="dark"] .text-slate-950 {
+  color: #f8fafc;
+}
+
+html.dark .text-slate-900,
+html[data-theme="dark"] .text-slate-900 {
+  color: #f1f5f9;
+}
+
+html.dark .text-slate-800,
+html[data-theme="dark"] .text-slate-800 {
+  color: #e2e8f0;
+}
+
+html.dark .text-slate-700,
+html[data-theme="dark"] .text-slate-700 {
+  color: #cbd5e1;
+}
+
+html.dark .text-slate-600,
+html[data-theme="dark"] .text-slate-600 {
+  color: #b6c2cf;
+}
+
+html.dark .text-slate-500,
+html[data-theme="dark"] .text-slate-500 {
+  color: #a8b5c4;
+}
+
+html.dark .text-slate-400,
+html[data-theme="dark"] .text-slate-400 {
+  color: #94a3b8;
+}
+
+
+/* Hardcoded white/light cards become proper dark surfaces */
+html.dark
+  :where(div, section, article, aside).bg-white,
+html[data-theme="dark"]
+  :where(div, section, article, aside).bg-white {
+  background-color: var(--agriva-surface);
+}
+
+html.dark
+  :where(div, section, article, aside).bg-slate-50,
+html[data-theme="dark"]
+  :where(div, section, article, aside).bg-slate-50 {
+  background-color: var(--agriva-surface-soft);
+}
+
+html.dark
+  :where(div, section, article, aside).bg-slate-100,
+html[data-theme="dark"]
+  :where(div, section, article, aside).bg-slate-100 {
+  background-color: var(--agriva-surface-soft);
+}
+
+
+/* Light green cards */
+html.dark
+  :where(div, section, article, aside).bg-emerald-50,
+html[data-theme="dark"]
+  :where(div, section, article, aside).bg-emerald-50,
+html.dark
+  :where(div, section, article, aside).bg-green-50,
+html[data-theme="dark"]
+  :where(div, section, article, aside).bg-green-50 {
+  background-color: #102a1d;
+}
+
+
+/* Blue info surfaces */
+html.dark
+  :where(div, section, article, aside).bg-blue-50,
+html[data-theme="dark"]
+  :where(div, section, article, aside).bg-blue-50 {
+  background-color: #101f35;
+}
+
+
+/* Amber/warning surfaces */
+html.dark
+  :where(div, section, article, aside).bg-amber-50,
+html[data-theme="dark"]
+  :where(div, section, article, aside).bg-amber-50,
+html.dark
+  :where(div, section, article, aside).bg-yellow-50,
+html[data-theme="dark"]
+  :where(div, section, article, aside).bg-yellow-50 {
+  background-color: #30260f;
+}
+
+
+/* Red/error surfaces */
+html.dark
+  :where(div, section, article, aside).bg-red-50,
+html[data-theme="dark"]
+  :where(div, section, article, aside).bg-red-50 {
+  background-color: #321414;
+}
+
+
+/* Borders */
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html[data-theme="dark"] .border-slate-100,
+html[data-theme="dark"] .border-slate-200 {
+  border-color: #294338;
+}
+
+html.dark .border-emerald-100,
+html.dark .border-emerald-200,
+html[data-theme="dark"] .border-emerald-100,
+html[data-theme="dark"] .border-emerald-200 {
+  border-color: #28523d;
+}
+
+
+/* Inputs */
+html.dark
+  :where(input, select, textarea),
+html[data-theme="dark"]
+  :where(input, select, textarea) {
+  color: #f8fafc;
+}
+
+html.dark
+  :where(input, select, textarea)::placeholder,
+html[data-theme="dark"]
+  :where(input, select, textarea)::placeholder {
+  color: #94a3b8;
+}
+
+
+/* Native selects need a dark background */
+html.dark select,
+html[data-theme="dark"] select {
+  background-color: #102019;
+}
+
+
+/* =========================================================
+   COMMON AGRIVA CARD QUALITY
+   ========================================================= */
+
+html:not(.dark)
+  :where(article, section, div)[class*="rounded-3xl"][class*="border"] {
+  border-color: var(--agriva-border);
+}
+
+html.dark
+  :where(article, section, div)[class*="rounded-3xl"][class*="border"],
+html[data-theme="dark"]
+  :where(article, section, div)[class*="rounded-3xl"][class*="border"] {
+  border-color: var(--agriva-border);
+}
+
+
+/* =========================================================
+   RECHARTS
+   ========================================================= */
+
+html.dark .recharts-cartesian-grid line,
+html[data-theme="dark"] .recharts-cartesian-grid line {
+  stroke: #294338;
+}
+
+html.dark .recharts-text,
+html[data-theme="dark"] .recharts-text {
+  fill: #cbd5e1;
+}
+
+
+/* =========================================================
+   END AGRIVA GLOBAL THEME V2
+   ========================================================= */
+
+
+/* AGRIVA_HOME_HERO_THEME_FIX */
+
+/* ---------- LIGHT ---------- */
+
+.agriva-home-hero {
+  background:
+    radial-gradient(
+      circle at 85% 10%,
+      rgba(167, 243, 208, 0.38),
+      transparent 32%
+    ),
+    linear-gradient(
+      135deg,
+      #f0fdf4 0%,
+      #f8fffa 50%,
+      #ecfdf5 100%
+    ) !important;
+
+  color: #0f172a;
+}
+
+.agriva-home-hero h1 {
+  color: #0f172a !important;
+}
+
+.agriva-home-hero p {
+  color: #475569 !important;
+}
+
+
+/* ---------- DARK ---------- */
+
+html.dark .agriva-home-hero,
+html[data-theme="dark"] .agriva-home-hero {
+  background:
+    radial-gradient(
+      circle at 85% 10%,
+      rgba(34, 197, 94, 0.15),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      #06110c 0%,
+      #0b2117 48%,
+      #0d2b1d 100%
+    ) !important;
+
+  color: #f8fafc;
+}
+
+html.dark .agriva-home-hero h1,
+html[data-theme="dark"] .agriva-home-hero h1 {
+  color: #f8fafc !important;
+}
+
+html.dark .agriva-home-hero p,
+html[data-theme="dark"] .agriva-home-hero p {
+  color: #cbd5e1 !important;
+}
+
+
+/* AI Recommendation badge */
+
+html.dark
+  .agriva-home-hero
+  :where(span)[class*="rounded-full"],
+html[data-theme="dark"]
+  .agriva-home-hero
+  :where(span)[class*="rounded-full"] {
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+
+/* Marketplace secondary action */
+
+html.dark
+  .agriva-home-hero
+  a[href="/marketplace"],
+html[data-theme="dark"]
+  .agriva-home-hero
+  a[href="/marketplace"] {
+  background: #13241d !important;
+  border-color: #315445 !important;
+  color: #f8fafc !important;
+}
+
+html.dark
+  .agriva-home-hero
+  a[href="/marketplace"]:hover,
+html[data-theme="dark"]
+  .agriva-home-hero
+  a[href="/marketplace"]:hover {
+  background: #193126 !important;
+}
+
+
+/* Dashboard primary action always high contrast */
+
+.agriva-home-hero
+  a[href="/dashboard/farmer"] {
+  color: #ffffff !important;
+}
+
+
+/* AGRIVA_TRANSLUCENT_SURFACE_DARK_FIX */
+
+/*
+   Tailwind classes such as bg-white/95, bg-white/90 and
+   bg-white/80 were staying light after switching AGRIVA
+   to dark mode.
+*/
+
+html.dark
+  :where(div, section, article, aside, form)[class*="bg-white/9"],
+html[data-theme="dark"]
+  :where(div, section, article, aside, form)[class*="bg-white/9"],
+html.dark
+  :where(div, section, article, aside, form)[class*="bg-white/8"],
+html[data-theme="dark"]
+  :where(div, section, article, aside, form)[class*="bg-white/8"] {
+  background-color: rgba(13, 29, 22, 0.97) !important;
+  color: #f8fafc;
+}
+
+
+/* Main headings on those surfaces */
+
+html.dark
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  :where(h1, h2, h3, h4),
+html[data-theme="dark"]
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  :where(h1, h2, h3, h4) {
+  color: #f8fafc !important;
+}
+
+
+/* Form labels */
+
+html.dark
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  label,
+html[data-theme="dark"]
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  label {
+  color: #dbe5ee !important;
+}
+
+
+/* Secondary explanatory copy */
+
+html.dark
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  .text-slate-500,
+html.dark
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  .text-slate-600,
+html[data-theme="dark"]
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  .text-slate-500,
+html[data-theme="dark"]
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  .text-slate-600 {
+  color: #b8c5d1 !important;
+}
+
+
+/* Login / registration input surfaces */
+
+html.dark
+  :where(input, textarea, select),
+html[data-theme="dark"]
+  :where(input, textarea, select) {
+  background-color: #0d182b !important;
+  border-color: #355044 !important;
+  color: #f8fafc !important;
+}
+
+html.dark
+  :where(input, textarea)::placeholder,
+html[data-theme="dark"]
+  :where(input, textarea)::placeholder {
+  color: #8798ac !important;
+}
+
+
+/* Dividers on dark forms */
+
+html.dark
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  :where(hr),
+html[data-theme="dark"]
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  :where(hr) {
+  border-color: #33493f !important;
+}
+
+
+/* Create-account/link copy stays readable */
+
+html.dark
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  a:not([class*="bg-emerald"]):not([class*="bg-green"]),
+html[data-theme="dark"]
+  :where(div, section, article, aside, form)[class*="bg-white/9"]
+  a:not([class*="bg-emerald"]):not([class*="bg-green"]) {
+  color: #d5e1ea;
+}
+
+
+/* Keep main AGRIVA actions bright */
+
+html.dark
+  :where(button, a)[class*="bg-emerald"],
+html[data-theme="dark"]
+  :where(button, a)[class*="bg-emerald"],
+html.dark
+  :where(button, a)[class*="bg-green"],
+html[data-theme="dark"]
+  :where(button, a)[class*="bg-green"] {
+  color: #ffffff;
+}
+
+
+/* AGRIVA_FARMER_DARK_FINAL */
+
+/*
+   Farmer Dashboard uses its own agriva-dark wrapper.
+   These rules deliberately depend on .agriva-dark instead
+   of only html.dark.
+*/
+
+
+/* =========================================================
+   PAGE / BODY
+   ========================================================= */
+
+html:has(.agriva-dark),
+body:has(.agriva-dark) {
+  background-color: #07140f !important;
+  color: #f8fafc !important;
+}
+
+.agriva-dark {
+  background-color: #07140f !important;
+  color: #f8fafc !important;
+  color-scheme: dark;
+}
+
+
+/* Prevent washed-out light page regions */
+
+.agriva-dark
+  :where(main, section, div)[class*="bg-[#F7FAF7]"],
+.agriva-dark
+  :where(main, section, div)[class*="bg-[#F4F7F2]"],
+.agriva-dark
+  :where(main, section, div)[class*="bg-[#F5F8F4]"] {
+  background-color: #07140f !important;
+}
+
+
+/* =========================================================
+   SECTION HEADINGS
+   ========================================================= */
+
+.agriva-dark
+  :where(h1, h2, h3, h4) {
+  color: #f8fafc !important;
+}
+
+
+/* =========================================================
+   NORMAL TEXT
+   ========================================================= */
+
+.agriva-dark .text-slate-950,
+.agriva-dark .text-slate-900,
+.agriva-dark .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+.agriva-dark .text-slate-700,
+.agriva-dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+.agriva-dark .text-slate-500 {
+  color: #b8c5d1 !important;
+}
+
+.agriva-dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+
+/* Farmer dashboard hex text */
+
+.agriva-dark [class*="text-[#0F172A]"],
+.agriva-dark [class*="text-[#334155]"] {
+  color: #e2e8f0 !important;
+}
+
+
+/* =========================================================
+   WHITE / LIGHT CARDS
+   ========================================================= */
+
+.agriva-dark
+  :where(div, section, article, aside)[class~="bg-white"],
+.agriva-dark
+  :where(div, section, article, aside)[class*="bg-white/"] {
+  background-color: #0d1d16 !important;
+  border-color: #294338 !important;
+}
+
+
+/* Slate light cards */
+
+.agriva-dark
+  :where(div, section, article, aside).bg-slate-50,
+.agriva-dark
+  :where(div, section, article, aside).bg-slate-100 {
+  background-color: #10231a !important;
+  border-color: #294338 !important;
+}
+
+
+/* Green light information cards */
+
+.agriva-dark
+  :where(div, section, article, aside).bg-emerald-50,
+.agriva-dark
+  :where(div, section, article, aside).bg-green-50 {
+  background-color: #102a1d !important;
+  border-color: #28523d !important;
+}
+
+
+/* =========================================================
+   CARD SECONDARY COPY
+   ========================================================= */
+
+.agriva-dark article p.text-slate-500,
+.agriva-dark article p.text-slate-600,
+.agriva-dark section p.text-slate-500,
+.agriva-dark section p.text-slate-600 {
+  color: #aebdca !important;
+}
+
+
+/* =========================================================
+   WEATHER MINI CARDS
+   ========================================================= */
+
+.agriva-dark
+  :where(article, div)[class*="bg-white"]
+  :where(.text-slate-900, .text-slate-800, .text-slate-700) {
+  color: #f1f5f9 !important;
+}
+
+
+/* =========================================================
+   BORDERS
+   ========================================================= */
+
+.agriva-dark .border-slate-100,
+.agriva-dark .border-slate-200,
+.agriva-dark .border-slate-300 {
+  border-color: #294338 !important;
+}
+
+
+/* =========================================================
+   BOTTOM NAVIGATION
+   ========================================================= */
+
+.agriva-dark nav {
+  background-color: #07140f !important;
+  border-color: #294338 !important;
+}
+
+.agriva-dark nav .text-slate-500,
+.agriva-dark nav .text-slate-600 {
+  color: #94a3b8 !important;
+}
+
+
+/* =========================================================
+   INPUT / SELECT
+   ========================================================= */
+
+.agriva-dark
+  :where(input, textarea, select) {
+  background-color: #0c1d16 !important;
+  border-color: #355044 !important;
+  color: #f8fafc !important;
+}
+
+.agriva-dark
+  :where(input, textarea)::placeholder {
+  color: #829388 !important;
+}
+
+
+/* =========================================================
+   KEEP AGRIVA ACTION BUTTONS HIGH CONTRAST
+   ========================================================= */
+
+.agriva-dark
+  :where(button, a)[class*="bg-emerald-"],
+.agriva-dark
+  :where(button, a)[class*="bg-green-"] {
+  color: #ffffff !important;
+}
+
+
+/* =========================================================
+   SHADOW QUALITY
+   ========================================================= */
+
+.agriva-dark
+  :where(article, section, div)[class*="shadow"] {
+  --tw-shadow-color: rgba(0, 0, 0, 0.28);
+}
+
+
+/* AGRIVA_FARMER_SECTION_HEADINGS_FIX */
+
+/*
+   Farmer dashboard section titles.
+   Keep them readable regardless of the page surface.
+*/
+
+.agriva-section-heading {
+  color: #0f172a !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+
+/* Current farmer dark layout keeps these separators
+   on a light page surface, so use strong dark-green text. */
+
+.agriva-dark .agriva-section-heading {
+  color: #062d20 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+
+/* Also cover root global dark state */
+
+html.dark .agriva-dark .agriva-section-heading,
+html[data-theme="dark"]
+  .agriva-dark
+  .agriva-section-heading {
+  color: #062d20 !important;
+}
+
+
+/* AGRIVA_WEATHER_METRIC_VISIBILITY_FIX */
+
+/*
+   Dashboard weather mini-cards intentionally stay light
+   in both themes for maximum readability.
+*/
+
+.agriva-weather-metric {
+  background: #f8fafc !important;
+  border-color: #d7e3da !important;
+  color: #0f172a !important;
+}
+
+.agriva-weather-metric-label {
+  color: #334155 !important;
+  opacity: 1 !important;
+}
+
+.agriva-weather-metric-value {
+  color: #0f172a !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+
+/* Dark mode: keep these four data cards readable */
+
+html.dark .agriva-weather-metric,
+html[data-theme="dark"] .agriva-weather-metric,
+.agriva-dark .agriva-weather-metric {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.dark .agriva-weather-metric-label,
+html[data-theme="dark"] .agriva-weather-metric-label,
+.agriva-dark .agriva-weather-metric-label {
+  color: #334155 !important;
+}
+
+html.dark .agriva-weather-metric-value,
+html[data-theme="dark"] .agriva-weather-metric-value,
+.agriva-dark .agriva-weather-metric-value {
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+
+/* Weather section subtitle on dark card */
+
+.agriva-dark [class*="text-[#475569]"] {
+  color: #a9bac8 !important;
+}
+
+
+/* AGRIVA_ANALYTICS_EMPHASIS_FINAL */
+
+/*
+   Analytics Total Revenue card is the special emphasis card.
+   Its original light gradient must be removed in dark mode.
+*/
+
+html.dark
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white,
+html[data-theme="dark"]
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white {
+  background-image: none !important;
+  background-color: #0b2118 !important;
+  border-color: #28513a !important;
+  color: #f8fafc !important;
+}
+
+
+/* Title */
+
+html.dark
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-slate-500,
+html.dark
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-slate-600,
+html[data-theme="dark"]
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-slate-500,
+html[data-theme="dark"]
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-slate-600 {
+  color: #b8c5d1 !important;
+}
+
+
+/* Main ₹ value */
+
+html.dark
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-slate-950,
+html.dark
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-slate-900,
+html.dark
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-slate-800,
+html[data-theme="dark"]
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-slate-950,
+html[data-theme="dark"]
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-slate-900,
+html[data-theme="dark"]
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-slate-800 {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+
+/* Emerald icon */
+
+html.dark
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-emerald-700,
+html[data-theme="dark"]
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+.text-emerald-700 {
+  color: #34d399 !important;
+}
+
+
+/* Decorative circle */
+
+html.dark
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+[class*="bg-emerald-500/5"],
+html[data-theme="dark"]
+article.border-emerald-300.bg-gradient-to-br.from-emerald-50.via-white.to-white
+[class*="bg-emerald-500/5"] {
+  background-color: rgba(16, 185, 129, 0.10) !important;
+}
+
+
+/* AGRIVA_STORAGE_DARK_FINAL */
+
+/*
+   Storage-specific dark-mode corrections.
+   These rules do not affect other AGRIVA pages.
+*/
+
+html.dark .agriva-storage-page,
+html[data-theme="dark"] .agriva-storage-page {
+  background: #06140f !important;
+  color: #f8fafc !important;
+}
+
+
+/* HERO */
+
+html.dark .agriva-storage-hero,
+html[data-theme="dark"] .agriva-storage-hero {
+  background-image:
+    linear-gradient(
+      135deg,
+      #06140f 0%,
+      #0b2118 52%,
+      #10281c 100%
+    ) !important;
+
+  border-color: #28513a !important;
+}
+
+html.dark .agriva-storage-hero h1,
+html[data-theme="dark"] .agriva-storage-hero h1 {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+html.dark .agriva-storage-hero-subtitle,
+html[data-theme="dark"] .agriva-storage-hero-subtitle {
+  color: #cbd5e1 !important;
+  -webkit-text-fill-color: #cbd5e1 !important;
+}
+
+
+/* MAIN PANELS */
+
+html.dark
+.agriva-storage-page
+.agriva-storage-panel,
+html[data-theme="dark"]
+.agriva-storage-page
+.agriva-storage-panel {
+  background: #0b2118 !important;
+  border-color: #28513a !important;
+  color: #f8fafc !important;
+}
+
+
+html.dark
+.agriva-storage-page
+.agriva-storage-panel-title,
+html[data-theme="dark"]
+.agriva-storage-page
+.agriva-storage-panel-title {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+
+/* Main panel description */
+
+html.dark
+.agriva-storage-panel
+.text-slate-600,
+html[data-theme="dark"]
+.agriva-storage-panel
+.text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+
+/* FACILITY CARD */
+
+html.dark
+.agriva-storage-facility-card,
+html[data-theme="dark"]
+.agriva-storage-facility-card {
+  background-image: none !important;
+  background-color: #102a1d !important;
+  border-color: #34d399 !important;
+  color: #f8fafc !important;
+}
+
+
+/* Facility name */
+
+html.dark
+.agriva-storage-facility-name,
+html[data-theme="dark"]
+.agriva-storage-facility-name {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+
+/* Facility address */
+
+html.dark
+.agriva-storage-facility-location,
+html[data-theme="dark"]
+.agriva-storage-facility-location {
+  color: #cbd5e1 !important;
+  -webkit-text-fill-color: #cbd5e1 !important;
+}
+
+
+/* Capacity cards */
+
+html.dark
+.agriva-storage-info,
+html[data-theme="dark"]
+.agriva-storage-info {
+  background: #081727 !important;
+  color: #f8fafc !important;
+}
+
+html.dark
+.agriva-storage-info
+.text-slate-500,
+html[data-theme="dark"]
+.agriva-storage-info
+.text-slate-500 {
+  color: #9fb0c5 !important;
+}
+
+html.dark
+.agriva-storage-info
+:where(.text-slate-900, .text-slate-950),
+html[data-theme="dark"]
+.agriva-storage-info
+:where(.text-slate-900, .text-slate-950) {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+
+/* Rate box */
+
+html.dark
+.agriva-storage-rate-box,
+html[data-theme="dark"]
+.agriva-storage-rate-box {
+  background: #081727 !important;
+  color: #f8fafc !important;
+}
+
+
+/* AGRIVA_ARRIVALS_DARK_FINAL */
+
+/*
+   Scoped ONLY to:
+   /dashboard/farmer/arrivals
+*/
+
+
+/* ====================================================
+   DARK PAGE
+   ==================================================== */
+
+html.dark .agriva-arrivals-page,
+html[data-theme="dark"] .agriva-arrivals-page {
+  background: #06140f !important;
+  color: #f8fafc !important;
+}
+
+
+/* ====================================================
+   HERO
+   ==================================================== */
+
+html.dark
+.agriva-arrivals-page
+> section:first-of-type,
+html[data-theme="dark"]
+.agriva-arrivals-page
+> section:first-of-type {
+  background-image:
+    linear-gradient(
+      135deg,
+      #06140f 0%,
+      #0b2118 52%,
+      #10291d 100%
+    ) !important;
+
+  background-color: #06140f !important;
+  border-color: #28513a !important;
+}
+
+
+/* Hero main title */
+
+html.dark
+.agriva-arrivals-page
+> section:first-of-type h1,
+html[data-theme="dark"]
+.agriva-arrivals-page
+> section:first-of-type h1 {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+
+/* Hero description */
+
+html.dark
+.agriva-arrivals-page
+> section:first-of-type p,
+html[data-theme="dark"]
+.agriva-arrivals-page
+> section:first-of-type p {
+  color: #cbd5e1 !important;
+  -webkit-text-fill-color: #cbd5e1 !important;
+}
+
+
+/* Market Intelligence badge should stay green */
+
+html.dark
+.agriva-arrivals-page
+> section:first-of-type
+.text-emerald-800,
+html[data-theme="dark"]
+.agriva-arrivals-page
+> section:first-of-type
+.text-emerald-800 {
+  color: #34d399 !important;
+  -webkit-text-fill-color: #34d399 !important;
+}
+
+
+/* ====================================================
+   MAIN CARDS
+   ==================================================== */
+
+html.dark
+.agriva-arrivals-page
+:where(section, article, div).bg-white,
+html[data-theme="dark"]
+.agriva-arrivals-page
+:where(section, article, div).bg-white {
+  background-color: #0b2118 !important;
+  border-color: #28513a !important;
+}
+
+
+/* Translucent white cards */
+
+html.dark
+.agriva-arrivals-page
+:where(section, article, div)[class*="bg-white/"],
+html[data-theme="dark"]
+.agriva-arrivals-page
+:where(section, article, div)[class*="bg-white/"] {
+  background-color: #0b2118 !important;
+  border-color: #28513a !important;
+}
+
+
+/* ====================================================
+   TITLES
+   Fixes "Check Market Arrivals"
+   ==================================================== */
+
+html.dark
+.agriva-arrivals-page
+h2,
+html.dark
+.agriva-arrivals-page
+h3,
+html[data-theme="dark"]
+.agriva-arrivals-page
+h2,
+html[data-theme="dark"]
+.agriva-arrivals-page
+h3 {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+
+/* Explicit emerald dark headings */
+
+html.dark
+.agriva-arrivals-page
+.text-emerald-950,
+html.dark
+.agriva-arrivals-page
+.text-emerald-900,
+html[data-theme="dark"]
+.agriva-arrivals-page
+.text-emerald-950,
+html[data-theme="dark"]
+.agriva-arrivals-page
+.text-emerald-900 {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+
+/* ====================================================
+   BODY / SECONDARY TEXT
+   ==================================================== */
+
+html.dark
+.agriva-arrivals-page
+.text-slate-700,
+html.dark
+.agriva-arrivals-page
+.text-slate-600,
+html[data-theme="dark"]
+.agriva-arrivals-page
+.text-slate-700,
+html[data-theme="dark"]
+.agriva-arrivals-page
+.text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark
+.agriva-arrivals-page
+.text-slate-500,
+html[data-theme="dark"]
+.agriva-arrivals-page
+.text-slate-500 {
+  color: #aab9c7 !important;
+}
+
+
+/* ====================================================
+   FORM LABELS
+   ==================================================== */
+
+html.dark
+.agriva-arrivals-page label,
+html[data-theme="dark"]
+.agriva-arrivals-page label {
+  color: #f1f5f9 !important;
+}
+
+
+/* ====================================================
+   INPUTS
+   ==================================================== */
+
+html.dark
+.agriva-arrivals-page
+:where(input, select, textarea),
+html[data-theme="dark"]
+.agriva-arrivals-page
+:where(input, select, textarea) {
+  background-color: #081c14 !important;
+  border-color: #315846 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+html.dark
+.agriva-arrivals-page
+:where(input, textarea)::placeholder,
+html[data-theme="dark"]
+.agriva-arrivals-page
+:where(input, textarea)::placeholder {
+  color: #94a3b8 !important;
+}
+
+
+/* ====================================================
+   LANGUAGE PANEL
+   ==================================================== */
+
+html.dark
+.agriva-arrivals-page
+[class*="bg-white/9"],
+html[data-theme="dark"]
+.agriva-arrivals-page
+[class*="bg-white/9"] {
+  background-color: #0b2118 !important;
+  border-color: #315846 !important;
+}
+
+
+/* ====================================================
+   BUTTONS
+   ==================================================== */
+
+html.dark
+.agriva-arrivals-page
+button[class*="bg-emerald"],
+html[data-theme="dark"]
+.agriva-arrivals-page
+button[class*="bg-emerald"] {
+  color: #ffffff !important;
+}
+
+
+/* ====================================================
+   LIGHT MODE PROTECTION
+   ==================================================== */
+
+html:not(.dark)
+.agriva-arrivals-page {
+  color: #0f172a;
+}
+
+
+/* AGRIVA_SOIL_DARK_FINAL */
+
+/*
+   Scoped only to Farmer Soil Health page.
+*/
+
+html.dark .agriva-soil-page,
+html[data-theme="dark"] .agriva-soil-page {
+  background-color: #06140f !important;
+  color: #f8fafc !important;
+}
+
+
+/* --------------------------------------------------
+   DARK CARD HEADINGS
+   -------------------------------------------------- */
+
+html.dark
+.agriva-soil-page
+:where(h2, h3, h4),
+html[data-theme="dark"]
+.agriva-soil-page
+:where(h2, h3, h4) {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+
+/* Fix hardcoded dark heading utilities */
+
+html.dark
+.agriva-soil-page
+:where(
+  .text-slate-950,
+  .text-slate-900,
+  .text-slate-800,
+  .text-emerald-950,
+  .text-emerald-900
+),
+html[data-theme="dark"]
+.agriva-soil-page
+:where(
+  .text-slate-950,
+  .text-slate-900,
+  .text-slate-800,
+  .text-emerald-950,
+  .text-emerald-900
+) {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+}
+
+
+/* --------------------------------------------------
+   SECONDARY TEXT
+   -------------------------------------------------- */
+
+html.dark
+.agriva-soil-page
+:where(
+  .text-slate-700,
+  .text-slate-600
+),
+html[data-theme="dark"]
+.agriva-soil-page
+:where(
+  .text-slate-700,
+  .text-slate-600
+) {
+  color: #cbd5e1 !important;
+}
+
+html.dark
+.agriva-soil-page
+:where(
+  .text-slate-500,
+  .text-slate-400
+),
+html[data-theme="dark"]
+.agriva-soil-page
+:where(
+  .text-slate-500,
+  .text-slate-400
+) {
+  color: #9fb0bd !important;
+}
+
+
+/* --------------------------------------------------
+   DARK PANELS
+   -------------------------------------------------- */
+
+html.dark
+.agriva-soil-page
+:where(section, article, div).bg-white,
+html[data-theme="dark"]
+.agriva-soil-page
+:where(section, article, div).bg-white {
+  background-color: #0b2118 !important;
+  border-color: #28513a !important;
+}
+
+html.dark
+.agriva-soil-page
+:where(section, article, div).bg-slate-50,
+html.dark
+.agriva-soil-page
+:where(section, article, div).bg-slate-100,
+html[data-theme="dark"]
+.agriva-soil-page
+:where(section, article, div).bg-slate-50,
+html[data-theme="dark"]
+.agriva-soil-page
+:where(section, article, div).bg-slate-100 {
+  background-color: #10271d !important;
+  border-color: #315846 !important;
+}
+
+
+/* --------------------------------------------------
+   INPUTS
+   -------------------------------------------------- */
+
+html.dark
+.agriva-soil-page
+:where(input, select, textarea),
+html[data-theme="dark"]
+.agriva-soil-page
+:where(input, select, textarea) {
+  background-color: #081c14 !important;
+  border-color: #315846 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+html.dark
+.agriva-soil-page
+:where(input, textarea)::placeholder,
+html[data-theme="dark"]
+.agriva-soil-page
+:where(input, textarea)::placeholder {
+  color: #94a3b8 !important;
+}
+
+
+/* --------------------------------------------------
+   LIGHT MODE
+   -------------------------------------------------- */
+
+html:not(.dark)
+.agriva-soil-page {
+  color: #0f172a;
+}
+
+
+/* AGRIVA_CROPSENSE_DARK_FINAL */
+
+/* Scoped only to CropSense recommendation page */
+
+html.dark .agriva-cropsense-page,
+html[data-theme="dark"] .agriva-cropsense-page {
+  background: #06140f !important;
+  color: #f8fafc !important;
+}
+
+
+/* Main section titles:
+   fixes "Your farm and soil context" etc. */
+
+html.dark
+.agriva-cropsense-page
+:where(h2, h3, h4),
+html[data-theme="dark"]
+.agriva-cropsense-page
+:where(h2, h3, h4) {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+
+/* Hardcoded dark title utilities */
+
+html.dark
+.agriva-cropsense-page
+:where(
+  .text-slate-950,
+  .text-slate-900,
+  .text-slate-800,
+  .text-emerald-950,
+  .text-emerald-900
+),
+html[data-theme="dark"]
+.agriva-cropsense-page
+:where(
+  .text-slate-950,
+  .text-slate-900,
+  .text-slate-800,
+  .text-emerald-950,
+  .text-emerald-900
+) {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+}
+
+
+/* Secondary descriptions */
+
+html.dark
+.agriva-cropsense-page
+:where(
+  .text-slate-700,
+  .text-slate-600
+),
+html[data-theme="dark"]
+.agriva-cropsense-page
+:where(
+  .text-slate-700,
+  .text-slate-600
+) {
+  color: #cbd5e1 !important;
+}
+
+html.dark
+.agriva-cropsense-page
+:where(
+  .text-slate-500,
+  .text-slate-400
+),
+html[data-theme="dark"]
+.agriva-cropsense-page
+:where(
+  .text-slate-500,
+  .text-slate-400
+) {
+  color: #9fb0bd !important;
+}
+
+
+/* White/light content cards */
+
+html.dark
+.agriva-cropsense-page
+:where(section, article, div).bg-white,
+html[data-theme="dark"]
+.agriva-cropsense-page
+:where(section, article, div).bg-white {
+  background-color: #0b2118 !important;
+  border-color: #28513a !important;
+}
+
+
+/* Slate light cards */
+
+html.dark
+.agriva-cropsense-page
+:where(section, article, div).bg-slate-50,
+html.dark
+.agriva-cropsense-page
+:where(section, article, div).bg-slate-100,
+html[data-theme="dark"]
+.agriva-cropsense-page
+:where(section, article, div).bg-slate-50,
+html[data-theme="dark"]
+.agriva-cropsense-page
+:where(section, article, div).bg-slate-100 {
+  background-color: #10271d !important;
+  border-color: #315846 !important;
+}
+
+
+/* Inputs */
+
+html.dark
+.agriva-cropsense-page
+:where(input, select, textarea),
+html[data-theme="dark"]
+.agriva-cropsense-page
+:where(input, select, textarea) {
+  background: #081c14 !important;
+  border-color: #315846 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+html.dark
+.agriva-cropsense-page
+:where(input, textarea)::placeholder,
+html[data-theme="dark"]
+.agriva-cropsense-page
+:where(input, textarea)::placeholder {
+  color: #94a3b8 !important;
+}
+
+
+/* Keep warning / rule-based recommendation box readable */
+
+html.dark
+.agriva-cropsense-page
+.bg-amber-50,
+html[data-theme="dark"]
+.agriva-cropsense-page
+.bg-amber-50 {
+  background: #fff7e8 !important;
+  color: #7c2d12 !important;
+}
+
+
+/* Light mode protection */
+
+html:not(.dark)
+.agriva-cropsense-page {
+  color: #0f172a;
+}
+
+
+
+/* ==============================================
+   AGRIVA FARMER DASHBOARD - VISIBILITY FIX
+   ============================================== */
+
+.agriva-farmer-top-nav button {
+  color: #1e293b !important;
+  opacity: 1 !important;
+  font-weight: 800 !important;
+}
+
+.agriva-farmer-top-nav button:hover {
+  color: #14532d !important;
+  background: #ecfdf5 !important;
+}
+
+.agriva-farmer-top-nav button[aria-current="page"] {
+  color: #14532d !important;
+  background: #d1fae5 !important;
+}
+
+/* Voice section */
+.agriva-voice-section h1,
+.agriva-voice-section h2,
+.agriva-voice-section h3 {
+  color: #ffffff !important;
+}
+

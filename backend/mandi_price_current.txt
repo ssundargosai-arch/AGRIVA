@@ -1,0 +1,502 @@
+from __future__ import annotations
+
+import os
+import time
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
+import httpx
+from dotenv import load_dotenv
+
+
+# Load variables from backend/.env
+load_dotenv()
+
+
+DATA_GOV_API_URL = (
+    "https://api.data.gov.in/resource/"
+    "9ef84268-d588-465a-a308-a864a43d0070"
+)
+
+
+class MandiPriceError(Exception):
+    """Raised when mandi-price data cannot be retrieved."""
+
+
+@dataclass(slots=True)
+class MandiPriceResult:
+    commodity: str
+    state: str | None
+    district: str | None
+    market: str | None
+    variety: str | None
+    grade: str | None
+    arrival_date: str | None
+    min_price: float | None
+    max_price: float | None
+    modal_price: float
+    source: str = "AGMARKNET / data.gov.in"
+    unit: str = "INR/quintal"
+
+
+COMMODITY_NAMES = {
+    "wheat": "Wheat",
+    "rice": "Rice",
+    "paddy": "Paddy(Dhan)(Common)",
+    "maize": "Maize",
+    "corn": "Maize",
+    "potato": "Potato",
+    "tomato": "Tomato",
+    "onion": "Onion",
+    "soybean": "Soyabean",
+    "soyabean": "Soyabean",
+    "mustard": "Mustard",
+    "cotton": "Cotton",
+    "sugarcane": "Sugarcane",
+}
+
+
+def normalize_commodity(crop: str) -> str:
+    cleaned = crop.strip()
+
+    if not cleaned:
+        raise MandiPriceError(
+            "Crop name is required."
+        )
+
+    return COMMODITY_NAMES.get(
+        cleaned.casefold(),
+        cleaned.title(),
+    )
+
+
+def normalize_location(location: str) -> str:
+    cleaned = " ".join(
+        location.strip().split()
+    )
+
+    if not cleaned:
+        raise MandiPriceError(
+            "Market or location is required."
+        )
+
+    return cleaned.title()
+
+
+def parse_price(value: Any) -> float | None:
+    if value is None:
+        return None
+
+    text = str(value).strip()
+
+    if not text:
+        return None
+
+    try:
+        number = float(text)
+    except (TypeError, ValueError):
+        return None
+
+    if number <= 0:
+        return None
+
+    return number
+
+
+def parse_date(value: str | None) -> datetime:
+    if not value:
+        return datetime.min
+
+    value = value.strip()
+
+    formats = (
+        "%d/%m/%Y",
+        "%d-%m-%Y",
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+    )
+
+    for date_format in formats:
+        try:
+            return datetime.strptime(
+                value,
+                date_format,
+            )
+        except ValueError:
+            continue
+
+    return datetime.min
+
+
+def record_matches_location(
+    record: dict[str, Any],
+    location: str,
+) -> bool:
+    expected = location.strip().casefold()
+
+    market = str(
+        record.get("market", "")
+    ).strip().casefold()
+
+    district = str(
+        record.get("district", "")
+    ).strip().casefold()
+
+    return (
+        expected == market
+        or expected == district
+        or expected in market
+        or expected in district
+    )
+
+
+def choose_latest_record(
+    records: list[dict[str, Any]],
+    location: str,
+) -> dict[str, Any] | None:
+    if not records:
+        return None
+
+    matching_records = [
+        record
+        for record in records
+        if record_matches_location(
+            record,
+            location,
+        )
+    ]
+
+    if not matching_records:
+        return None
+
+    valid_records = [
+        record
+        for record in matching_records
+        if parse_price(
+            record.get("modal_price")
+        )
+        is not None
+    ]
+
+    if not valid_records:
+        return None
+
+    return max(
+        valid_records,
+        key=lambda record: parse_date(
+            str(
+                record.get(
+                    "arrival_date",
+                    "",
+                )
+            )
+        ),
+    )
+
+
+def request_records(
+    *,
+    api_key: str,
+    commodity: str,
+    location: str,
+    location_field: str,
+) -> list[dict[str, Any]]:
+    params = {
+        "api-key": api_key,
+        "format": "json",
+        "offset": 0,
+        "limit": 100,
+        "filters[commodity]": commodity,
+        f"filters[{location_field}]": location,
+    }
+
+    timeout = httpx.Timeout(
+        connect=10.0,
+        read=60.0,
+        write=10.0,
+        pool=10.0,
+    )
+
+    last_exception: Exception | None = None
+
+    for attempt in range(3):
+        try:
+            with httpx.Client(
+                timeout=timeout,
+                follow_redirects=True,
+            ) as client:
+                response = client.get(
+                    DATA_GOV_API_URL,
+                    params=params,
+                    headers={
+                        "Accept": "application/json",
+                        "User-Agent": "AGRIVA/1.0",
+                    },
+                )
+
+                response.raise_for_status()
+
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise MandiPriceError(
+                    "Government mandi-price service "
+                    "returned invalid JSON data."
+                ) from exc
+
+            if not isinstance(payload, dict):
+                raise MandiPriceError(
+                    "Government mandi-price service "
+                    "returned an unexpected response."
+                )
+
+            records = payload.get(
+                "records",
+                [],
+            )
+
+            if not isinstance(records, list):
+                return []
+
+            return [
+                record
+                for record in records
+                if isinstance(record, dict)
+            ]
+
+        except httpx.TimeoutException as exc:
+            last_exception = exc
+
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
+
+        except httpx.HTTPStatusError as exc:
+            status_code = (
+                exc.response.status_code
+            )
+
+            if status_code in {
+                401,
+                403,
+            }:
+                raise MandiPriceError(
+                    "Government mandi API rejected "
+                    "the API key."
+                ) from exc
+
+            if status_code == 429:
+                raise MandiPriceError(
+                    "Government mandi API rate "
+                    "limit exceeded."
+                ) from exc
+
+            raise MandiPriceError(
+                "Government mandi-price service "
+                f"returned HTTP {status_code}."
+            ) from exc
+
+        except httpx.RequestError as exc:
+            last_exception = exc
+
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
+
+    raise MandiPriceError(
+        "Government mandi-price service timed out "
+        "or is temporarily unavailable."
+    ) from last_exception
+
+
+def fetch_latest_mandi_price(
+    *,
+    crop: str,
+    location: str,
+) -> MandiPriceResult:
+    api_key = os.getenv(
+        "DATA_GOV_API_KEY",
+        "",
+    ).strip()
+
+    enabled = (
+        os.getenv(
+            "MANDI_API_ENABLED",
+            "true",
+        )
+        .strip()
+        .lower()
+        in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+    )
+
+    if not enabled:
+        raise MandiPriceError(
+            "Government mandi-price integration "
+            "is disabled."
+        )
+
+    if not api_key:
+        raise MandiPriceError(
+            "DATA_GOV_API_KEY is not configured."
+        )
+
+    placeholder_keys = {
+        "YOUR_DATA_GOV_IN_API_KEY",
+        "YOUR_ACTUAL_DATA_GOV_API_KEY",
+        "YOUR_REAL_API_KEY",
+        "YOUR_GENERATED_KEY",
+    }
+
+    if api_key.upper() in placeholder_keys:
+        raise MandiPriceError(
+            "DATA_GOV_API_KEY still contains "
+            "a placeholder value."
+        )
+
+    commodity = normalize_commodity(crop)
+
+    normalized_location = normalize_location(
+        location
+    )
+
+    # -------------------------------------------------
+    # Attempt 1:
+    # Treat provided location as district.
+    #
+    # Example:
+    # Jaunpur -> district=Jaunpur
+    # -------------------------------------------------
+
+    records = request_records(
+        api_key=api_key,
+        commodity=commodity,
+        location=normalized_location,
+        location_field="district",
+    )
+
+    record = choose_latest_record(
+        records,
+        normalized_location,
+    )
+
+    # -------------------------------------------------
+    # Attempt 2:
+    # If district search has no usable record,
+    # treat the location as a mandi/market.
+    # -------------------------------------------------
+
+    if record is None:
+        records = request_records(
+            api_key=api_key,
+            commodity=commodity,
+            location=normalized_location,
+            location_field="market",
+        )
+
+        record = choose_latest_record(
+            records,
+            normalized_location,
+        )
+
+    if record is None:
+        raise MandiPriceError(
+            "No mandi price was found for "
+            f"{commodity} in "
+            f"{normalized_location}."
+        )
+
+    modal_price = parse_price(
+        record.get("modal_price")
+    )
+
+    if modal_price is None:
+        raise MandiPriceError(
+            "The mandi record does not contain "
+            "a valid modal price."
+        )
+
+    return MandiPriceResult(
+        commodity=str(
+            record.get(
+                "commodity",
+                commodity,
+            )
+        ).strip()
+        or commodity,
+
+        state=(
+            str(
+                record.get(
+                    "state",
+                    "",
+                )
+            ).strip()
+            or None
+        ),
+
+        district=(
+            str(
+                record.get(
+                    "district",
+                    "",
+                )
+            ).strip()
+            or None
+        ),
+
+        market=(
+            str(
+                record.get(
+                    "market",
+                    "",
+                )
+            ).strip()
+            or None
+        ),
+
+        variety=(
+            str(
+                record.get(
+                    "variety",
+                    "",
+                )
+            ).strip()
+            or None
+        ),
+
+        grade=(
+            str(
+                record.get(
+                    "grade",
+                    "",
+                )
+            ).strip()
+            or None
+        ),
+
+        arrival_date=(
+            str(
+                record.get(
+                    "arrival_date",
+                    "",
+                )
+            ).strip()
+            or None
+        ),
+
+        min_price=parse_price(
+            record.get("min_price")
+        ),
+
+        max_price=parse_price(
+            record.get("max_price")
+        ),
+
+        modal_price=modal_price,
+    )

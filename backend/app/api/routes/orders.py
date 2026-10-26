@@ -1,5 +1,4 @@
 ﻿from uuid import UUID
-
 from fastapi import (
     APIRouter,
     Depends,
@@ -7,38 +6,34 @@ from fastapi import (
     status,
 )
 from sqlalchemy.orm import Session
-from app.models.finance import Payment
 
 from app.api.dependencies import (
     get_current_user,
     require_farmer,
 )
 from app.db.session import get_db
-
 from app.models.crop import Crop
 from app.models.farm import Farm, FarmField
+from app.models.finance import Payment
 from app.models.market import (
     Buyer,
     CropListing,
     Order,
     OrderItem,
 )
+from app.models.order_tracking import (
+    OrderTrackingEvent,
+)
 from app.models.user import (
     BuyerProfile,
     FarmerProfile,
     User,
 )
-
 from app.schemas.order import (
     OrderCreate,
     OrderResponse,
     OrderStatusUpdate,
 )
-
-from app.models.order_tracking import (
-    OrderTrackingEvent,
-)
-
 from app.schemas.order_tracking import (
     OrderTrackingResponse,
 )
@@ -54,14 +49,11 @@ router = APIRouter(
 # HELPERS
 # =========================================================
 
+
 def get_buyer_for_user(
     db: Session,
     current_user: User,
 ) -> Buyer:
-    """
-    Convert authenticated BUYER user into marketplace Buyer.
-    """
-
     if current_user.role != "BUYER":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -71,7 +63,8 @@ def get_buyer_for_user(
     buyer_profile = (
         db.query(BuyerProfile)
         .filter(
-            BuyerProfile.user_id == current_user.id
+            BuyerProfile.user_id
+            == current_user.id
         )
         .first()
     )
@@ -85,7 +78,8 @@ def get_buyer_for_user(
     buyer = (
         db.query(Buyer)
         .filter(
-            Buyer.buyer_profile_id == buyer_profile.id
+            Buyer.buyer_profile_id
+            == buyer_profile.id
         )
         .first()
     )
@@ -93,7 +87,10 @@ def get_buyer_for_user(
     if buyer is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Marketplace buyer record not found",
+            detail=(
+                "Marketplace buyer record "
+                "not found"
+            ),
         )
 
     return buyer
@@ -103,14 +100,17 @@ def get_farmer_profile(
     db: Session,
     current_user: User,
 ) -> FarmerProfile:
-    """
-    Get FarmerProfile belonging to authenticated FARMER.
-    """
+    if current_user.role != "FARMER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Farmer access required",
+        )
 
     farmer_profile = (
         db.query(FarmerProfile)
         .filter(
-            FarmerProfile.user_id == current_user.id
+            FarmerProfile.user_id
+            == current_user.id
         )
         .first()
     )
@@ -128,21 +128,6 @@ def farmer_order_query(
     db: Session,
     current_user: User,
 ):
-    """
-    Return only orders belonging to marketplace
-    listings owned by the current farmer.
-
-    Ownership chain:
-
-    User
-      -> FarmerProfile
-      -> Farm
-      -> FarmField
-      -> Crop
-      -> CropListing
-      -> Order
-    """
-
     farmer_profile = get_farmer_profile(
         db,
         current_user,
@@ -152,22 +137,27 @@ def farmer_order_query(
         db.query(Order)
         .join(
             CropListing,
-            Order.listing_id == CropListing.id,
+            Order.listing_id
+            == CropListing.id,
         )
         .join(
             Crop,
-            CropListing.crop_id == Crop.id,
+            CropListing.crop_id
+            == Crop.id,
         )
         .join(
             FarmField,
-            Crop.field_id == FarmField.id,
+            Crop.field_id
+            == FarmField.id,
         )
         .join(
             Farm,
-            FarmField.farm_id == Farm.id,
+            FarmField.farm_id
+            == Farm.id,
         )
         .filter(
-            Farm.farmer_id == farmer_profile.id
+            Farm.farmer_id
+            == farmer_profile.id
         )
     )
 
@@ -175,6 +165,7 @@ def farmer_order_query(
 # =========================================================
 # HEALTH
 # =========================================================
+
 
 @router.get("/health")
 def orders_health():
@@ -193,6 +184,7 @@ def orders_health():
 # BUYER ONLY
 # =========================================================
 
+
 @router.post(
     "",
     response_model=OrderResponse,
@@ -205,15 +197,6 @@ def create_order(
         get_current_user
     ),
 ):
-    db.add(order)
-    db.flush()
-    tracking_event = OrderTrackingEvent(
-    order_id=order.id,
-    status="pending",
-    message="Order placed by buyer",
-)
-
-    db.add(tracking_event)
     buyer = get_buyer_for_user(
         db,
         current_user,
@@ -222,7 +205,8 @@ def create_order(
     listing = (
         db.query(CropListing)
         .filter(
-            CropListing.id == payload.listing_id
+            CropListing.id
+            == payload.listing_id
         )
         .first()
     )
@@ -242,10 +226,16 @@ def create_order(
     if payload.quantity_kg <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Quantity must be greater than zero",
+            detail=(
+                "Quantity must be "
+                "greater than zero"
+            ),
         )
 
-    if payload.quantity_kg > listing.quantity_kg:
+    if (
+        payload.quantity_kg
+        > listing.quantity_kg
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -259,31 +249,47 @@ def create_order(
     )
 
     total_amount = round(
-        payload.quantity_kg * price_per_kg,
+        payload.quantity_kg
+        * price_per_kg,
         2,
     )
 
-    order = Order(
-        listing_id=listing.id,
-        buyer_id=buyer.id,
-        total_amount=total_amount,
-        status="pending",
-    )
-
     try:
+        order = Order(
+            listing_id=listing.id,
+            buyer_id=buyer.id,
+            total_amount=total_amount,
+            status="pending",
+        )
+
         db.add(order)
         db.flush()
 
         order_item = OrderItem(
             order_id=order.id,
             crop_id=listing.crop_id,
-            quantity_kg=payload.quantity_kg,
-            price_per_kg=price_per_kg,
+            quantity_kg=(
+                payload.quantity_kg
+            ),
+            price_per_kg=(
+                price_per_kg
+            ),
         )
 
         db.add(order_item)
 
-        # Reserve stock immediately.
+        tracking_event = (
+            OrderTrackingEvent(
+                order_id=order.id,
+                status="pending",
+                message=(
+                    "Order placed by buyer"
+                ),
+            )
+        )
+
+        db.add(tracking_event)
+
         listing.quantity_kg -= (
             payload.quantity_kg
         )
@@ -295,20 +301,27 @@ def create_order(
         db.commit()
         db.refresh(order)
 
+        return order
+
+    except HTTPException:
+        db.rollback()
+        raise
+
     except Exception as exc:
         db.rollback()
 
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
             detail="Unable to create order",
         ) from exc
-
-    return order
 
 
 # =========================================================
 # BUYER - MY ORDERS
 # =========================================================
+
 
 @router.get(
     "/my-orders",
@@ -339,10 +352,9 @@ def get_my_orders(
 
 # =========================================================
 # FARMER - VIEW INCOMING ORDERS
-#
-# IMPORTANT:
-# Keep this route BEFORE /{order_id}
+# Keep before /{order_id}
 # =========================================================
+
 
 @router.get(
     "/farmer/incoming",
@@ -354,11 +366,6 @@ def get_farmer_orders(
         require_farmer
     ),
 ):
-    """
-    Return only orders for listings owned
-    by the authenticated farmer.
-    """
-
     return (
         farmer_order_query(
             db,
@@ -372,9 +379,10 @@ def get_farmer_orders(
 
 
 # =========================================================
-# GET SINGLE ORDER
-# BUYER/FARMER OWNERSHIP PROTECTED
+# ORDER TRACKING
 # =========================================================
+
+
 @router.get(
     "/{order_id}/tracking",
     response_model=list[
@@ -388,7 +396,6 @@ def get_order_tracking(
         get_current_user
     ),
 ):
-    # BUYER ownership
     if current_user.role == "BUYER":
         buyer = get_buyer_for_user(
             db,
@@ -399,12 +406,12 @@ def get_order_tracking(
             db.query(Order)
             .filter(
                 Order.id == order_id,
-                Order.buyer_id == buyer.id,
+                Order.buyer_id
+                == buyer.id,
             )
             .first()
         )
 
-    # FARMER ownership
     elif current_user.role == "FARMER":
         order = (
             farmer_order_query(
@@ -441,6 +448,12 @@ def get_order_tracking(
         .all()
     )
 
+
+# =========================================================
+# GET SINGLE ORDER
+# =========================================================
+
+
 @router.get(
     "/{order_id}",
     response_model=OrderResponse,
@@ -452,10 +465,6 @@ def get_order(
         get_current_user
     ),
 ):
-    # -----------------------------------------------------
-    # BUYER
-    # -----------------------------------------------------
-
     if current_user.role == "BUYER":
         buyer = get_buyer_for_user(
             db,
@@ -466,7 +475,8 @@ def get_order(
             db.query(Order)
             .filter(
                 Order.id == order_id,
-                Order.buyer_id == buyer.id,
+                Order.buyer_id
+                == buyer.id,
             )
             .first()
         )
@@ -478,10 +488,6 @@ def get_order(
             )
 
         return order
-
-    # -----------------------------------------------------
-    # FARMER
-    # -----------------------------------------------------
 
     if current_user.role == "FARMER":
         order = (
@@ -503,10 +509,6 @@ def get_order(
 
         return order
 
-    # -----------------------------------------------------
-    # OTHER ROLES
-    # -----------------------------------------------------
-
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Access denied",
@@ -514,12 +516,9 @@ def get_order(
 
 
 # =========================================================
-# FARMER - UPDATE OWN ORDER STATUS ONLY
-#
-# SECURITY
-# + LIFECYCLE
-# + INVENTORY RESTORE
+# FARMER - UPDATE ORDER STATUS
 # =========================================================
+
 
 @router.patch(
     "/{order_id}/status",
@@ -533,22 +532,6 @@ def update_order_status(
         require_farmer
     ),
 ):
-    # =====================================================
-    # SECURITY
-    # Farmer can update only orders belonging
-    # to their own marketplace listing.
-    # =====================================================
-    tracking_event = OrderTrackingEvent(
-    order_id=order.id,
-    status=new_status,
-    message=(
-        f"Order status changed to "
-        f"{new_status}"
-    ),
-)
-
-    db.add(tracking_event)
-
     order = (
         farmer_order_query(
             db,
@@ -565,10 +548,6 @@ def update_order_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Order not found",
         )
-
-    # =====================================================
-    # NORMALIZE STATUS
-    # =====================================================
 
     new_status = (
         payload.status
@@ -590,7 +569,10 @@ def update_order_status(
         "cancelled",
     }
 
-    if new_status not in allowed_statuses:
+    if (
+        new_status
+        not in allowed_statuses
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -599,19 +581,6 @@ def update_order_status(
                 "rejected, completed, cancelled"
             ),
         )
-
-    # =====================================================
-    # ORDER LIFECYCLE
-    #
-    # pending -> accepted
-    # pending -> rejected
-    # pending -> cancelled
-    #
-    # accepted -> completed
-    # accepted -> cancelled
-    #
-    # rejected / completed / cancelled are terminal.
-    # =====================================================
 
     allowed_transitions = {
         "pending": {
@@ -628,8 +597,10 @@ def update_order_status(
         "cancelled": set(),
     }
 
-    # Same status is safe/idempotent.
-    if new_status == current_status:
+    if (
+        new_status
+        == current_status
+    ):
         return order
 
     valid_next_statuses = (
@@ -642,42 +613,44 @@ def update_order_status(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Unknown current order status: "
-                f"{current_status}"
+                "Unknown current order "
+                f"status: {current_status}"
             ),
         )
 
-    if new_status not in valid_next_statuses:
+    if (
+        new_status
+        not in valid_next_statuses
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Invalid order status transition: "
-                f"{current_status} -> {new_status}"
+                "Invalid order status "
+                "transition: "
+                f"{current_status} "
+                f"-> {new_status}"
             ),
         )
 
     try:
-
-        # =========================================================
-# PAYMENT CANCELLATION PROTECTION
-#
-# A successfully paid order cannot be cancelled directly.
-# The payment must be refunded first.
-# =========================================================
+        # ---------------------------------------------
+        # PAYMENT CANCELLATION PROTECTION
+        # ---------------------------------------------
 
         if new_status == "cancelled":
-
             payment = (
                 db.query(Payment)
                 .filter(
-                    Payment.order_id == order.id
+                    Payment.order_id
+                    == order.id
                 )
-                .order_by(Payment.id.desc())
+                .order_by(
+                    Payment.id.desc()
+                )
                 .first()
             )
 
             if payment is not None:
-
                 payment_status = (
                     payment.status
                     .strip()
@@ -691,23 +664,24 @@ def update_order_status(
                     "successful",
                 }
 
-                if payment_status in protected_payment_statuses:
+                if (
+                    payment_status
+                    in protected_payment_statuses
+                ):
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
+                        status_code=(
+                            status.HTTP_400_BAD_REQUEST
+                        ),
                         detail=(
-                            "Paid order cannot be cancelled. "
+                            "Paid order cannot "
+                            "be cancelled. "
                             "Refund the payment first."
                         ),
                     )
-            
-        # =================================================
-        # INVENTORY RESTORATION
-        #
-        # Stock was already reserved when the order
-        # was created.
-        #
-        # Restore it if the order is rejected/cancelled.
-        # =================================================
+
+        # ---------------------------------------------
+        # INVENTORY RESTORE
+        # ---------------------------------------------
 
         if new_status in {
             "rejected",
@@ -724,48 +698,75 @@ def update_order_status(
 
             if listing is None:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Order listing not found",
+                    status_code=(
+                        status.HTTP_404_NOT_FOUND
+                    ),
+                    detail=(
+                        "Order listing not found"
+                    ),
                 )
 
             order_items = (
                 db.query(OrderItem)
                 .filter(
-                    OrderItem.order_id == order.id
+                    OrderItem.order_id
+                    == order.id
                 )
                 .all()
             )
 
             if not order_items:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Order items not found",
+                    status_code=(
+                        status.HTTP_404_NOT_FOUND
+                    ),
+                    detail=(
+                        "Order items not found"
+                    ),
                 )
 
             restore_quantity = sum(
-                float(item.quantity_kg)
+                float(
+                    item.quantity_kg
+                )
                 for item in order_items
             )
 
             listing.quantity_kg = (
-                float(listing.quantity_kg)
+                float(
+                    listing.quantity_kg
+                )
                 + restore_quantity
             )
 
-            # If all stock had been reserved,
-            # listing may have become sold.
-            # Reactivate once stock is restored.
             if (
                 listing.quantity_kg > 0
                 and listing.status == "sold"
             ):
                 listing.status = "active"
 
-        # =================================================
-        # UPDATE ORDER STATUS
-        # =================================================
+        # ---------------------------------------------
+        # UPDATE STATUS
+        # ---------------------------------------------
 
         order.status = new_status
+
+        # ---------------------------------------------
+        # TRACKING EVENT
+        # ---------------------------------------------
+
+        tracking_event = (
+            OrderTrackingEvent(
+                order_id=order.id,
+                status=new_status,
+                message=(
+                    "Order status changed "
+                    f"to {new_status}"
+                ),
+            )
+        )
+
+        db.add(tracking_event)
 
         db.commit()
         db.refresh(order)
@@ -780,6 +781,11 @@ def update_order_status(
         db.rollback()
 
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unable to update order status",
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail=(
+                "Unable to update "
+                "order status"
+            ),
         ) from exc

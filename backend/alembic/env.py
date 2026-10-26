@@ -44,6 +44,7 @@ from app.models import (
     Notification,
     Review,
     Analytics,
+    Grievance,
 )
 
 config = context.config

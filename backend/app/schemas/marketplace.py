@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -7,6 +8,7 @@ from pydantic import BaseModel, Field
 # =========================================================
 # CROP LISTINGS
 # =========================================================
+
 
 class CropListingCreate(BaseModel):
     crop_id: UUID
@@ -88,8 +90,50 @@ class MarketplaceListingSummary(BaseModel):
 # BUYER MATCHING
 # =========================================================
 
+
+BuyerMatchLabel = Literal[
+    "BEST_MATCH",
+    "EXCELLENT",
+    "GOOD",
+    "FAIR",
+    "LOW",
+]
+
+
 class BuyerMatchRequest(BaseModel):
     listing_id: UUID
+
+
+class BuyerMatchBreakdownResponse(BaseModel):
+    crop_score: float = Field(
+        ge=0,
+        le=30,
+    )
+
+    quantity_score: float = Field(
+        ge=0,
+        le=20,
+    )
+
+    price_score: float = Field(
+        ge=0,
+        le=20,
+    )
+
+    quality_score: float = Field(
+        ge=0,
+        le=15,
+    )
+
+    distance_score: float = Field(
+        ge=0,
+        le=10,
+    )
+
+    rating_score: float = Field(
+        ge=0,
+        le=5,
+    )
 
 
 class BuyerMatchItem(BaseModel):
@@ -97,10 +141,18 @@ class BuyerMatchItem(BaseModel):
 
     buyer_name: str
 
+    buyer_city: str | None = None
+    buyer_state: str | None = None
+
+    preferred_crop: str | None = None
+    preferred_quality: str | None = None
+
     match_percentage: float = Field(
         ge=0,
         le=100,
     )
+
+    match_label: BuyerMatchLabel
 
     offer_price: float | None = None
 
@@ -109,6 +161,13 @@ class BuyerMatchItem(BaseModel):
     distance_km: float | None = None
 
     buyer_rating: float | None = None
+
+    verification_status: str = "UNVERIFIED"
+    verification_label: str = "Not verified by AGRIVA"
+    verification_note: str = ""
+    agriva_verified: bool = False
+
+    breakdown: BuyerMatchBreakdownResponse
 
 
 class BuyerMatchResponse(BaseModel):
@@ -122,6 +181,7 @@ class BuyerMatchResponse(BaseModel):
 # =========================================================
 # FAVORITES
 # =========================================================
+
 
 class FavoriteCreate(BaseModel):
     listing_id: UUID
@@ -138,6 +198,7 @@ class FavoriteResponse(BaseModel):
 # =========================================================
 # ORDERS
 # =========================================================
+
 
 class OrderCreate(BaseModel):
     listing_id: UUID
@@ -168,6 +229,7 @@ class MarketplaceOrderResponse(BaseModel):
 # =========================================================
 # COMMON RESPONSE
 # =========================================================
+
 
 class MessageResponse(BaseModel):
     message: str

@@ -1,0 +1,956 @@
+﻿
+"use client";
+
+import Link from "next/link";
+import type { FormEvent } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  ArrowLeft,
+  Loader2,
+  Minus,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
+
+import { useTranslations } from "next-intl";
+
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://127.0.0.1:8000"
+).replace(/\/$/, "");
+
+type QualityGrade =
+  | "A+"
+  | "A"
+  | "B"
+  | "C"
+  | "Premium"
+  | "Standard";
+
+type CropOption = {
+  id: string;
+  name: string;
+  variety: string | null;
+  status: string;
+};
+
+type ChartPoint = {
+  label: string;
+  price: number;
+};
+
+type PriceResult = {
+  id: string;
+  crop_id: string | null;
+  crop: string;
+  location: string;
+  quality: string;
+  quantity: number;
+  season: string;
+
+  current_price: number;
+  predicted_price: number;
+
+  expected_range_min: number;
+  expected_range_max: number;
+
+  confidence: number;
+
+  trend:
+    | "UP"
+    | "DOWN"
+    | "STABLE";
+
+  historical_prices: number[];
+  chart_data: ChartPoint[];
+
+  demo_mode: boolean;
+  disclaimer: string;
+};
+
+const QUALITY_OPTIONS: QualityGrade[] = [
+  "A+",
+  "A",
+  "B",
+  "C",
+  "Premium",
+  "Standard",
+];
+
+export default function PricePage() {
+  const t = useTranslations("pricePage");
+
+  const [crops, setCrops] =
+    useState<CropOption[]>([]);
+
+  const [
+    selectedCropId,
+    setSelectedCropId,
+  ] = useState("");
+
+  const [
+    loadingCrops,
+    setLoadingCrops,
+  ] = useState(true);
+
+  const [location, setLocation] =
+    useState("Prayagraj");
+
+  const [quantity, setQuantity] =
+    useState("100");
+
+  const [season, setSeason] =
+    useState("Rabi");
+
+  /*
+   * This works as a fallback.
+   *
+   * If the selected crop already has a Crop Quality
+   * prediction, the backend uses that latest grade.
+   *
+   * If no quality prediction exists yet, the backend
+   * can use this manually selected quality.
+   */
+  const [quality, setQuality] =
+    useState<QualityGrade>("A");
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [result, setResult] =
+    useState<PriceResult | null>(
+      null,
+    );
+
+  useEffect(() => {
+    async function loadCrops() {
+      const token =
+        localStorage.getItem(
+          "access_token",
+        );
+
+      if (!token) {
+        setError(t("loginError"));
+        setLoadingCrops(false);
+        return;
+      }
+
+      try {
+        const response =
+          await fetch(
+            `${API_URL}/api/crops`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            },
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            typeof data?.detail ===
+              "string"
+              ? data.detail
+              : t(
+                  "loadCropsFailed",
+                ),
+          );
+        }
+
+        if (!Array.isArray(data)) {
+          throw new Error(
+            t("loadCropsFailed"),
+          );
+        }
+
+        const cropList =
+          data as CropOption[];
+
+        setCrops(cropList);
+
+        if (
+          cropList.length > 0
+        ) {
+          setSelectedCropId(
+            cropList[0].id,
+          );
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : t(
+                "loadCropsFailed",
+              ),
+        );
+      } finally {
+        setLoadingCrops(
+          false,
+        );
+      }
+    }
+
+    void loadCrops();
+  }, [t]);
+
+  async function predictPrice(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    setError("");
+
+    if (!selectedCropId) {
+      setError(
+        t("selectCropError"),
+      );
+      return;
+    }
+
+    if (!location.trim()) {
+      setError(
+        t("locationError"),
+      );
+      return;
+    }
+
+    const quantityValue =
+      Number(quantity);
+
+    if (
+      !Number.isFinite(
+        quantityValue,
+      ) ||
+      quantityValue <= 0
+    ) {
+      setError(
+        t("quantityError"),
+      );
+      return;
+    }
+
+    if (!season.trim()) {
+      setError(
+        t("seasonError"),
+      );
+      return;
+    }
+
+    const token =
+      localStorage.getItem(
+        "access_token",
+      );
+
+    if (!token) {
+      setError(
+        t("loginError"),
+      );
+      return;
+    }
+
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const response =
+        await fetch(
+          `${API_URL}/api/ai/price-prediction`,
+          {
+            method: "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              crop_id:
+                selectedCropId,
+
+              location:
+                location.trim(),
+
+              quality,
+
+              quantity:
+                quantityValue,
+
+              season:
+                season.trim(),
+
+              historical_prices:
+                [],
+            }),
+          },
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          typeof data?.detail ===
+            "string"
+            ? data.detail
+            : t(
+                "predictionFailed",
+              ),
+        );
+      }
+
+      setResult(
+        data as PriceResult,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t(
+              "predictionFailed",
+            ),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function trendLabel(
+    trend:
+      PriceResult["trend"],
+  ) {
+    if (trend === "UP") {
+      return t("trendUp");
+    }
+
+    if (trend === "DOWN") {
+      return t(
+        "trendDown",
+      );
+    }
+
+    return t(
+      "trendStable",
+    );
+  }
+
+  function trendIcon(
+    trend:
+      PriceResult["trend"],
+  ) {
+    if (trend === "UP") {
+      return (
+        <TrendingUp className="h-5 w-5" />
+      );
+    }
+
+    if (
+      trend === "DOWN"
+    ) {
+      return (
+        <TrendingDown className="h-5 w-5" />
+      );
+    }
+
+    return (
+      <Minus className="h-5 w-5" />
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        {/* Back */}
+        <Link
+          href="/dashboard/farmer"
+          className="inline-flex items-center gap-2 font-medium text-green-700 transition hover:text-green-800"
+        >
+          <ArrowLeft
+            size={18}
+          />
+
+          {t(
+            "backToDashboard",
+          )}
+        </Link>
+
+        {/* Header */}
+        <div className="mt-8">
+          <h1 className="text-3xl font-bold text-slate-900">
+            {t("title")}
+          </h1>
+
+          <p className="mt-2 max-w-2xl text-slate-600">
+            {t(
+              "subtitle",
+            )}
+          </p>
+        </div>
+
+        {/* Prediction form */}
+        <form
+          onSubmit={
+            predictPrice
+          }
+          className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <div className="grid gap-5 md:grid-cols-2">
+            {/* Crop */}
+            <div>
+              <label
+                htmlFor="crop"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                {t(
+                  "registeredCrop",
+                )}
+              </label>
+
+              {loadingCrops ? (
+                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+
+                  {t(
+                    "loadingCrops",
+                  )}
+                </div>
+              ) : crops.length >
+                0 ? (
+                <select
+                  id="crop"
+                  value={
+                    selectedCropId
+                  }
+                  onChange={(
+                    event,
+                  ) => {
+                    setSelectedCropId(
+                      event
+                        .target
+                        .value,
+                    );
+
+                    setResult(
+                      null,
+                    );
+
+                    setError(
+                      "",
+                    );
+                  }}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-100"
+                >
+                  {crops.map(
+                    (
+                      crop,
+                    ) => (
+                      <option
+                        key={
+                          crop.id
+                        }
+                        value={
+                          crop.id
+                        }
+                      >
+                        {
+                          crop.name
+                        }
+
+                        {crop.variety
+                          ? ` - ${crop.variety}`
+                          : ""}
+                      </option>
+                    ),
+                  )}
+                </select>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  {t(
+                    "noCrops",
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Location */}
+            <div>
+              <label
+                htmlFor="location"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                {t(
+                  "location",
+                )}
+              </label>
+
+              <input
+                id="location"
+                value={
+                  location
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setLocation(
+                    event
+                      .target
+                      .value,
+                  )
+                }
+                placeholder={t(
+                  "locationPlaceholder",
+                )}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-100"
+              />
+            </div>
+
+            {/* Quantity */}
+            <div>
+              <label
+                htmlFor="quantity"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                {t(
+                  "quantity",
+                )}
+              </label>
+
+              <input
+                id="quantity"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={
+                  quantity
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setQuantity(
+                    event
+                      .target
+                      .value,
+                  )
+                }
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-100"
+              />
+            </div>
+
+            {/* Season */}
+            <div>
+              <label
+                htmlFor="season"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                {t(
+                  "season",
+                )}
+              </label>
+
+              <input
+                id="season"
+                value={
+                  season
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setSeason(
+                    event
+                      .target
+                      .value,
+                  )
+                }
+                placeholder={t(
+                  "seasonPlaceholder",
+                )}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-100"
+              />
+            </div>
+
+            {/* Quality fallback */}
+            <div className="md:col-span-2">
+              <label
+                htmlFor="quality"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                {t(
+                  "quality",
+                )}
+              </label>
+
+              <select
+                id="quality"
+                value={
+                  quality
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setQuality(
+                    event
+                      .target
+                      .value as QualityGrade,
+                  )
+                }
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-100"
+              >
+                {QUALITY_OPTIONS.map(
+                  (
+                    option,
+                  ) => (
+                    <option
+                      key={
+                        option
+                      }
+                      value={
+                        option
+                      }
+                    >
+                      {
+                        option
+                      }
+                    </option>
+                  ),
+                )}
+              </select>
+
+              <p className="mt-2 text-xs text-slate-500">
+                If AGRIVA already has a crop-quality analysis for this crop,
+                the latest detected quality grade will be used automatically.
+              </p>
+            </div>
+          </div>
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={
+              loading ||
+              loadingCrops ||
+              crops.length ===
+                0
+            }
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-green-700 py-3 font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+          >
+            {loading && (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            )}
+
+            {loading
+              ? t(
+                  "predicting",
+                )
+              : t(
+                  "predict",
+                )}
+          </button>
+
+          {/* Error */}
+          {error && (
+            <div
+              role="alert"
+              className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700"
+            >
+              {error}
+            </div>
+          )}
+        </form>
+
+        {/* Prediction result */}
+        {result && (
+          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            {/* Demo warning */}
+            {result.demo_mode && (
+              <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
+                <strong>
+                  {t(
+                    "demoPrediction",
+                  )}
+                </strong>
+
+                <p className="mt-1 text-sm">
+                  {
+                    result.disclaimer
+                  }
+                </p>
+              </div>
+            )}
+
+            {/* Main result cards */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <ResultCard
+                label={t(
+                  "currentPrice",
+                )}
+                value={`₹${result.current_price.toFixed(
+                  2,
+                )} per 100 kg`}
+              />
+
+              <ResultCard
+                label={t(
+                  "predictedPrice",
+                )}
+                value={`₹${result.predicted_price.toFixed(
+                  2,
+                )} per 100 kg`}
+              />
+
+              <ResultCard
+                label={t(
+                  "expectedRange",
+                )}
+                value={`₹${result.expected_range_min.toFixed(
+                  2,
+                )} - ₹${result.expected_range_max.toFixed(
+                  2,
+                )} per 100 kg`}
+              />
+
+              <ResultCard
+                label={t(
+                  "confidence",
+                )}
+                value={`${result.confidence.toFixed(
+                  0,
+                )}%`}
+              />
+            </div>
+
+            {/* Details */}
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <InfoCard
+                label={t(
+                  "crop",
+                )}
+                value={
+                  result.crop
+                }
+              />
+
+              <InfoCard
+                label={t(
+                  "quality",
+                )}
+                value={
+                  result.quality
+                }
+              />
+
+              <InfoCard
+                label={t(
+                  "market",
+                )}
+                value={
+                  result.location
+                }
+              />
+
+              <InfoCard
+                label={t(
+                  "quantityLabel",
+                )}
+                value={`${result.quantity} kg`}
+              />
+
+              <InfoCard
+                label={t(
+                  "seasonLabel",
+                )}
+                value={
+                  result.season
+                }
+              />
+
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                <p className="text-sm text-slate-500">
+                  {t(
+                    "trend",
+                  )}
+                </p>
+
+                <div className="mt-2 flex items-center gap-2 font-bold text-slate-900">
+                  {trendIcon(
+                    result.trend,
+                  )}
+
+                  {trendLabel(
+                    result.trend,
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Price chart */}
+            {result.chart_data
+              .length > 0 && (
+              <div className="mt-8 rounded-2xl border border-slate-200 p-5">
+                <div className="mb-5">
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Price Trend
+                  </h2>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Historical,
+                    current and
+                    predicted crop
+                    prices
+                  </p>
+                </div>
+
+                <div className="h-80 w-full">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                  >
+                    <LineChart
+                      data={
+                        result.chart_data
+                      }
+                      margin={{
+                        top: 10,
+                        right: 20,
+                        left: 10,
+                        bottom: 10,
+                      }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                      />
+
+                      <XAxis
+                        dataKey="label"
+                      />
+
+                      <YAxis />
+
+                      <Tooltip />
+
+                      <Line
+                        type="monotone"
+                        dataKey="price"
+                        stroke="#15803d"
+                        strokeWidth={
+                          3
+                        }
+                        activeDot={{
+                          r: 6,
+                        }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Historical prices */}
+            {result
+              .historical_prices
+              .length > 0 && (
+              <div className="mt-6 rounded-xl bg-slate-50 p-5">
+                <p className="font-semibold text-slate-900">
+                  Historical
+                  Prices
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {result.historical_prices.map(
+                    (
+                      price,
+                      index,
+                    ) => (
+                      <span
+                        key={`${price}-${index}`}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
+                      >
+                        ₹
+                        {price.toFixed(
+                          2,
+                        )}
+                      </span>
+                    ),
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Disclaimer in production too */}
+            {!result.demo_mode &&
+              result.disclaimer && (
+                <p className="mt-6 text-sm text-slate-500">
+                  {
+                    result.disclaimer
+                  }
+                </p>
+              )}
+          </section>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function ResultCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-xl border border-green-100 bg-green-50 p-5">
+      <p className="text-sm text-slate-500">
+        {label}
+      </p>
+
+      <p className="mt-2 text-xl font-bold text-green-700">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function InfoCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+      <p className="text-sm text-slate-500">
+        {label}
+      </p>
+
+      <p className="mt-2 font-bold text-slate-900">
+        {value}
+      </p>
+    </div>
+  );
+}
+

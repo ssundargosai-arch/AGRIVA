@@ -405,7 +405,6 @@ def get_transport_booking(
 # UPDATE TRANSPORT STATUS
 # DEMO TRANSPORT FLOW
 # =========================================================
-
 @router.patch(
     "/{booking_id}/status",
     response_model=TransportBookingResponse,
@@ -438,37 +437,11 @@ def update_transport_status(
         )
         .first()
     )
-    order_status_map = {
-    "confirmed": "processing",
-    "picked_up": "ready_for_pickup",
-    "in_transit": "in_transit",
-    "delivered": "delivered",
-    "cancelled": "cancelled",
-}
-
-    timeline_status = order_status_map.get(
-    new_status
-)
-
-    if timeline_status:
-        db.add(
-         OrderTrackingEvent(
-            order_id=booking.order_id,
-            status=timeline_status,
-            message=(
-                "Transport status changed "
-                f"to {new_status}"
-                ),
-            )
-        )
-
 
     if booking is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                "Transport booking not found"
-            ),
+            detail="Transport booking not found",
         )
 
     new_status = (
@@ -496,6 +469,115 @@ def update_transport_status(
                 "delivered, cancelled"
             ),
         )
+
+    current_status = (
+        booking.status
+        .strip()
+        .lower()
+    )
+
+    if new_status == current_status:
+        return booking
+
+    allowed_transitions = {
+        "requested": {
+            "confirmed",
+            "cancelled",
+        },
+        "confirmed": {
+            "picked_up",
+            "cancelled",
+        },
+        "picked_up": {
+            "in_transit",
+        },
+        "in_transit": {
+            "delivered",
+        },
+        "delivered": set(),
+        "cancelled": set(),
+    }
+
+    valid_next_statuses = (
+        allowed_transitions.get(
+            current_status,
+            set(),
+        )
+    )
+
+    if new_status not in valid_next_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Invalid transport status "
+                f"transition: "
+                f"{current_status} -> "
+                f"{new_status}"
+            ),
+        )
+
+    order_status_map = {
+        "confirmed": "processing",
+        "picked_up": "ready_for_pickup",
+        "in_transit": "in_transit",
+        "delivered": "delivered",
+        "cancelled": "cancelled",
+    }
+
+    try:
+        booking.status = new_status
+
+        timeline_status = (
+            order_status_map.get(
+                new_status
+            )
+        )
+
+        if timeline_status:
+            db.add(
+                OrderTrackingEvent(
+                    order_id=booking.order_id,
+                    status=timeline_status,
+                    message=(
+                        "Transport status changed "
+                        f"to {new_status}"
+                    ),
+                )
+            )
+
+        # Delivery completes the related order.
+        if new_status == "delivered":
+            order = (
+                db.query(Order)
+                .filter(
+                    Order.id
+                    == booking.order_id
+                )
+                .first()
+            )
+
+            if order:
+                order.status = "completed"
+
+        db.commit()
+        db.refresh(booking)
+
+    except Exception as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail=(
+                "Unable to update "
+                "transport status"
+            ),
+        ) from exc
+
+    return booking
+
+
 
     # -----------------------------------------------------
     # Valid status transitions

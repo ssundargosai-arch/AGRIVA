@@ -1,0 +1,385 @@
+{
+  "version": 1,
+  "entries": {
+    "maize|jaunpur|uttar pradesh": {
+      "saved_at": 1788470872.4247777,
+      "result": {
+        "commodity": "Maize",
+        "state": "Uttar Pradesh",
+        "district": null,
+        "market": "Uttar Pradesh market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "03/09/2026",
+        "min_price": 700.0,
+        "max_price": 10500.0,
+        "modal_price": 2200.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "maize|prayagraj|uttar pradesh": {
+      "saved_at": 1788470984.4981189,
+      "result": {
+        "commodity": "Maize",
+        "state": "Uttar Pradesh",
+        "district": null,
+        "market": "Uttar Pradesh market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "03/09/2026",
+        "min_price": 700.0,
+        "max_price": 10500.0,
+        "modal_price": 2200.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "wheat|nashik|uttar pradesh": {
+      "saved_at": 1788539537.6716096,
+      "result": {
+        "commodity": "Wheat",
+        "state": "Maharashtra",
+        "district": "Nashik",
+        "market": "APMC Devala",
+        "variety": "Maharashtra 2189",
+        "grade": "FAQ",
+        "arrival_date": "04/09/2026",
+        "min_price": 2650.0,
+        "max_price": 2925.0,
+        "modal_price": 2925.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "DISTRICT",
+        "cached_at": null
+      }
+    },
+    "onion|nashik|uttar pradesh": {
+      "saved_at": 1788504645.9100068,
+      "result": {
+        "commodity": "Onion",
+        "state": "Uttar Pradesh",
+        "district": null,
+        "market": "Uttar Pradesh market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "04/09/2026",
+        "min_price": 710.0,
+        "max_price": 5800.0,
+        "modal_price": 3500.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "maize|nashik|uttar pradesh": {
+      "saved_at": 1788587149.4242136,
+      "result": {
+        "commodity": "Maize",
+        "state": "Uttar Pradesh",
+        "district": null,
+        "market": "Uttar Pradesh market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "05/09/2026",
+        "min_price": 1500.0,
+        "max_price": 4800.0,
+        "modal_price": 2400.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "wheat|bulandshahr|uttar pradesh": {
+      "saved_at": 1788505708.4544628,
+      "result": {
+        "commodity": "Wheat",
+        "state": "Uttar Pradesh",
+        "district": null,
+        "market": "Uttar Pradesh market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "04/09/2026",
+        "min_price": 2300.0,
+        "max_price": 3400.0,
+        "modal_price": 2512.2250000000004,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "wheat|aligarh|uttar pradesh": {
+      "saved_at": 1788505853.2249243,
+      "result": {
+        "commodity": "Wheat",
+        "state": "Uttar Pradesh",
+        "district": null,
+        "market": "Uttar Pradesh market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "04/09/2026",
+        "min_price": 2300.0,
+        "max_price": 3400.0,
+        "modal_price": 2512.2250000000004,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "wheat|gautam budh nagar|uttar pradesh": {
+      "saved_at": 1788505884.7196417,
+      "result": {
+        "commodity": "Wheat",
+        "state": "Uttar Pradesh",
+        "district": null,
+        "market": "Uttar Pradesh market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "04/09/2026",
+        "min_price": 2300.0,
+        "max_price": 3400.0,
+        "modal_price": 2512.2250000000004,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "wheat|gaziabad|uttar pradesh": {
+      "saved_at": 1788505908.350135,
+      "result": {
+        "commodity": "Wheat",
+        "state": "Uttar Pradesh",
+        "district": null,
+        "market": "Uttar Pradesh market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "04/09/2026",
+        "min_price": 2300.0,
+        "max_price": 3400.0,
+        "modal_price": 2512.2250000000004,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "wheat|prayagraj|uttar pradesh": {
+      "saved_at": 1788540251.775004,
+      "result": {
+        "commodity": "Wheat",
+        "state": "Uttar Pradesh",
+        "district": "Prayagraj",
+        "market": "Prayagraj APMC",
+        "variety": "Other",
+        "grade": "FAQ",
+        "arrival_date": "04/09/2026",
+        "min_price": 2600.0,
+        "max_price": 2600.0,
+        "modal_price": 2600.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "DISTRICT",
+        "cached_at": null
+      }
+    },
+    "maize|nashik|maharashtra": {
+      "saved_at": 1790063247.7951179,
+      "result": {
+        "commodity": "Maize",
+        "state": "Maharashtra",
+        "district": "Nashik",
+        "market": "Maharashtra market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "22/09/2026",
+        "min_price": 2400.0,
+        "max_price": 3400.0,
+        "modal_price": 2825.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "wheat|pune|maharashtra": {
+      "saved_at": 1788590192.2438006,
+      "result": {
+        "commodity": "Wheat",
+        "state": "Maharashtra",
+        "district": "Pune",
+        "market": "Maharashtra market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "05/09/2026",
+        "min_price": 2200.0,
+        "max_price": 3400.0,
+        "modal_price": 2425.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "onion|nashik|maharashtra": {
+      "saved_at": 1788628739.384522,
+      "result": {
+        "commodity": "Onion",
+        "state": "Maharashtra",
+        "district": "Nashik",
+        "market": "APMC Lasalgaon",
+        "variety": "Unhali",
+        "grade": "Local",
+        "arrival_date": "05/09/2026",
+        "min_price": 1200.0,
+        "max_price": 4952.0,
+        "modal_price": 4551.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "DISTRICT",
+        "cached_at": null
+      }
+    },
+    "onion|noida|uttar pradesh": {
+      "saved_at": 1788596346.076449,
+      "result": {
+        "commodity": "Onion",
+        "state": "Uttar Pradesh",
+        "district": "Gautam Buddha Nagar",
+        "market": "Uttar Pradesh market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "05/09/2026",
+        "min_price": 500.0,
+        "max_price": 6000.0,
+        "modal_price": 3700.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "potato|noida|uttar pradesh": {
+      "saved_at": 1788596403.8916068,
+      "result": {
+        "commodity": "Potato",
+        "state": "Uttar Pradesh",
+        "district": "Gautam Buddha Nagar",
+        "market": "Uttar Pradesh market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "05/09/2026",
+        "min_price": 200.0,
+        "max_price": 2800.0,
+        "modal_price": 715.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "potato|nashik|maharashtra": {
+      "saved_at": 1788596425.0677056,
+      "result": {
+        "commodity": "Potato",
+        "state": "Maharashtra",
+        "district": "Nashik",
+        "market": "Maharashtra market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "05/09/2026",
+        "min_price": 500.0,
+        "max_price": 3000.0,
+        "modal_price": 1250.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "methi|nashik|maharashtra": {
+      "saved_at": 1788628751.11381,
+      "result": {
+        "commodity": "Methi",
+        "state": "Maharashtra",
+        "district": "Nashik",
+        "market": "Maharashtra market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "05/09/2026",
+        "min_price": 2.0,
+        "max_price": 6000.0,
+        "modal_price": 800.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "methi seeds|nashik|maharashtra": {
+      "saved_at": 1788628765.9746902,
+      "result": {
+        "commodity": "Methi Seeds",
+        "state": "Maharashtra",
+        "district": "Nashik",
+        "market": "Maharashtra market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "05/09/2026",
+        "min_price": 2.0,
+        "max_price": 6000.0,
+        "modal_price": 800.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    },
+    "methi leaf|nashik|maharashtra": {
+      "saved_at": 1788628779.7893786,
+      "result": {
+        "commodity": "Methi Leaf",
+        "state": "Maharashtra",
+        "district": "Nashik",
+        "market": "Maharashtra market aggregate",
+        "variety": null,
+        "grade": null,
+        "arrival_date": "05/09/2026",
+        "min_price": 2.0,
+        "max_price": 6000.0,
+        "modal_price": 800.0,
+        "source": "AGMARKNET / data.gov.in",
+        "unit": "INR/quintal",
+        "data_mode": "LIVE",
+        "match_level": "STATE",
+        "cached_at": null
+      }
+    }
+  }
+}

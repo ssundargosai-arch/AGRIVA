@@ -1,5 +1,9 @@
 import json
 import os
+from uuid import UUID
+
+from app.models.farm import Farm, FarmField
+from app.models.user import FarmerProfile, User
 from typing import Optional
 from app.services.crop_recommendation import recommend_crops
 
@@ -139,6 +143,7 @@ def calculate_demo_analysis(
 
 @router.post("/soil-analysis")
 async def soil_analysis(
+    field_id: UUID | None = Form(None),
     ph: Optional[float] = Form(None),
     nitrogen: Optional[float] = Form(None),
     phosphorus: Optional[float] = Form(None),
@@ -150,9 +155,57 @@ async def soil_analysis(
     source_type: str = Form("manual"),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(
+        get_current_user
+    ),
 ):
-    demo_mode = os.getenv("DEMO_MODE", "true").lower() == "true"
+    demo_mode = (
+        os.getenv(
+            "DEMO_MODE",
+            "true",
+        ).lower()
+        == "true"
+    )
+
+    # -----------------------------------------------------
+    # Validate field ownership
+    # -----------------------------------------------------
+
+    field = None
+
+    if field_id is not None:
+        field = (
+            db.query(FarmField)
+            .join(
+                Farm,
+                FarmField.farm_id
+                == Farm.id,
+            )
+            .join(
+                FarmerProfile,
+                Farm.farmer_id
+                == FarmerProfile.id,
+            )
+            .filter(
+                FarmField.id == field_id,
+                FarmerProfile.user_id
+                == current_user.id,
+            )
+            .first()
+        )
+
+        if field is None:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Field not found or does "
+                    "not belong to farmer"
+                ),
+            )
+
+    # -----------------------------------------------------
+    # Validate source type
+    # -----------------------------------------------------
 
     if source_type not in {
         "manual",
@@ -165,6 +218,10 @@ async def soil_analysis(
             detail="Invalid source_type.",
         )
 
+    # -----------------------------------------------------
+    # Optional uploaded file
+    # -----------------------------------------------------
+
     if file:
         allowed = {
             "image/jpeg",
@@ -176,24 +233,42 @@ async def soil_analysis(
         if file.content_type not in allowed:
             raise HTTPException(
                 status_code=400,
-                detail="Supported files: JPG, JPEG, PNG, WEBP and PDF.",
+                detail=(
+                    "Supported files: JPG, JPEG, "
+                    "PNG, WEBP and PDF."
+                ),
             )
 
-        # Phase 5 demo mode does not run computer vision/OCR yet.
-        # The uploaded file is accepted and represented as a simulated analysis.
-        source_type = (
-            "camera"
-            if source_type == "camera"
-            else "image"
-            if file.content_type.startswith("image/")
-            else "report"
-        )
+        if source_type == "camera":
+            source_type = "camera"
+
+        elif (
+            file.content_type
+            and file.content_type.startswith(
+                "image/"
+            )
+        ):
+            source_type = "image"
+
+        else:
+            source_type = "report"
+
+    # -----------------------------------------------------
+    # Demo mode
+    # -----------------------------------------------------
 
     if not demo_mode:
         raise HTTPException(
             status_code=501,
-            detail="Production soil AI service is not configured yet.",
+            detail=(
+                "Production soil AI service "
+                "is not configured yet."
+            ),
         )
+
+    # -----------------------------------------------------
+    # Calculate soil analysis
+    # -----------------------------------------------------
 
     result = calculate_demo_analysis(
         ph,
@@ -206,18 +281,35 @@ async def soil_analysis(
         soil_type,
     )
 
+    # -----------------------------------------------------
+    # Save analysis
+    # -----------------------------------------------------
+
     analysis = SoilAnalysis(
         farmer_id=current_user.id,
+        field_id=(
+            field.id
+            if field is not None
+            else None
+        ),
         soil_type=result["soil_type"],
         ph=result["ph"],
         nitrogen=result["nitrogen"],
         phosphorus=result["phosphorus"],
         potassium=result["potassium"],
-        organic_carbon=result["organic_carbon"],
+        organic_carbon=(
+            result["organic_carbon"]
+        ),
         moisture=result["moisture"],
-        temperature=result["temperature"],
-        soil_health_score=result["soil_health_score"],
-        recommendations=json.dumps(result["recommendations"]),
+        temperature=(
+            result["temperature"]
+        ),
+        soil_health_score=(
+            result["soil_health_score"]
+        ),
+        recommendations=json.dumps(
+            result["recommendations"]
+        ),
         source_type=source_type,
         demo_mode=True,
     )
@@ -226,15 +318,30 @@ async def soil_analysis(
     db.commit()
     db.refresh(analysis)
 
+    # -----------------------------------------------------
+    # Response
+    # -----------------------------------------------------
+
     return {
         "success": True,
-        "message": "Simulated soil analysis completed.",
+        "message": (
+            "Simulated soil analysis "
+            "completed."
+        ),
         "data": {
             "id": str(analysis.id),
+            "field_id": (
+                str(analysis.field_id)
+                if analysis.field_id
+                else None
+            ),
             **result,
             "source_type": source_type,
             "demo_mode": True,
-            "created_at": analysis.created_at.isoformat(),
+            "created_at": (
+                analysis.created_at
+                .isoformat()
+            ),
         },
     }
 
@@ -255,6 +362,11 @@ def soil_analysis_history(
         "data": [
             {
                 "id": str(row.id),
+		"field_id": (
+        	        str(row.field_id)
+        		if row.field_id
+        		else None
+    		),
                 "soil_type": row.soil_type,
                 "ph": row.ph,
                 "soil_health_score": row.soil_health_score,
